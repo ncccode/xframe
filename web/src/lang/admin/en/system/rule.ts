@@ -1,0 +1,53 @@
+export default {
+    title: 'Title',
+    Icon: 'Icon',
+    name: 'Name',
+    type: 'Type',
+    cache: 'Cache',
+    'Superior menu rule': 'Superior menu rules',
+    'Rule type': 'Rule type',
+    'type menu_dir': 'Menu directory',
+    'type menu': 'Menu item',
+    'type button': 'Page button',
+    'Rule title': 'Rule title',
+    'Rule name': 'Rule name',
+    'Routing path': 'Routing path',
+    'Rule Icon': 'Rule Icon',
+    'Menu type': 'Menu type',
+    'Menu type tab': 'Tab',
+    'Menu type link (offsite)': 'Link (off-site)',
+    'Link address': 'Link address',
+    'Component path': 'Component path',
+    'Extended properties': 'Extended properties',
+    'Add as route only': 'Add as route only',
+    'Add as menu only': 'Add as menu only',
+    'Rule comments': 'Rule comments',
+    'Rule sort': 'Rule sort',
+    'Create Page Button': 'Create Page Button',
+    'Create Page Button index': 'index',
+    'Create Page Button add': 'add',
+    'Create Page Button edit': 'edit',
+    'Create Page Button del': 'del',
+    'Create Page Button sortable': 'sortable',
+    'Create Page Button tips': 'When creating the menu, automatically create the menu page buttons (permission nodes)',
+    'Please select the button for automatically creating the desired page': 'Please select the button for automatically creating the desired page',
+    'Please enter the sort value of menu rule': 'Please enter the menu rule sort value',
+    'Please enter the correct URL': 'Please enter the correct URL',
+    'The superior menu rule cannot be the rule itself': 'The superior menu rules cannot be rules itself.',
+    'It will be registered as the web side routing name and used as the server side API authentication':
+        'It will be registered as the routing name of the webside and used as a server-side API authentication at the same time.',
+    'Please enter the URL address of the link or iframe': 'Please enter the link or the URL address of iframe.',
+    'English name, which does not need to start with `/admin`, such as system/menu':
+        'The English name does not need to start with `/admin`, such as: system/menu.',
+    'Web side component path, please start with /src, such as: /src/views/admin/dashboard':
+        'Please start with /src for web side component paths, such as: /src/views/admin/dashboard.vue',
+    'The web side routing path (path) does not need to start with `/admin`, such as system/menu':
+        'The web side routing path (Path) does not need to start with `/admin`, such as: system/menu.',
+    'System config path query tips':
+        'System config menus can append ?group=basics or ?groups=basics,upload to limit and open specific config groups.',
+    'Use in controller `get_ route_ Remark()` function, which can obtain the value of this field for your own use, such as the banner file of the console':
+        'Use the `get_route_remark()` function in the controller can get the value of this field for your own use, such as the banner file for the console.',
+    'extend Title':
+        "For example, if 'system/menu' is only added as a route, then `system/menu`, `system/menu/:a` and `system/menu/:b/:c` can be added only as menus.",
+    none: 'None',
+}

@@ -1,0 +1,250 @@
+<?php
+
+namespace core\utils;
+
+use Throwable;
+use ZipArchive;
+use FilesystemIterator;
+use RecursiveIteratorIterator;
+use RecursiveDirectoryIterator;
+use RuntimeException;
+
+/**
+ * 访问和操作文件系统
+ */
+class Filesystem
+{
+    /**
+     * 是否是空目录
+     */
+    public static function dirIsEmpty(string $dir): bool
+    {
+        if (!file_exists($dir)) return true;
+        $handle = opendir($dir);
+        while (false !== ($entry = readdir($handle))) {
+            if ($entry != "." && $entry != "..") {
+                closedir($handle);
+                return false;
+            }
+        }
+        closedir($handle);
+        return true;
+    }
+
+    /**
+     * 递归删除目录
+     * @param string $dir     目录路径
+     * @param bool   $delSelf 是否删除传递的目录本身
+     * @return bool
+     */
+    public static function delDir(string $dir, bool $delSelf = true): bool
+    {
+        if (!is_dir($dir)) {
+            return false;
+        }
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+            RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($files as $fileInfo) {
+            if ($fileInfo->isDir()) {
+                self::delDir($fileInfo->getRealPath());
+            } else {
+                @unlink($fileInfo->getRealPath());
+            }
+        }
+        if ($delSelf) {
+            @rmdir($dir);
+        }
+        return true;
+    }
+
+    /**
+     * 删除一个路径下的所有相对空文件夹（删除此路径中的所有空文件夹）
+     * @param string $path 相对于根目录的文件夹路径 如`c:XFrame/a/b/`
+     * @return void
+     */
+    public static function delEmptyDir(string $path): void
+    {
+        $path = str_replace(base_path(), '', rtrim(self::fsFit($path), DIRECTORY_SEPARATOR));
+        $path = array_filter(explode(DIRECTORY_SEPARATOR, $path));
+        for ($i = count($path) - 1; $i >= 0; $i--) {
+            $dirPath = base_path() . implode(DIRECTORY_SEPARATOR, $path);
+            if (!is_dir($dirPath)) {
+                unset($path[$i]);
+                continue;
+            }
+            if (self::dirIsEmpty($dirPath)) {
+                self::delDir($dirPath);
+                unset($path[$i]);
+            } else {
+                break;
+            }
+        }
+    }
+
+    /**
+     * 检查目录/文件是否可写
+     * @param $path
+     * @return bool
+     */
+    public static function pathIsWritable($path): bool
+    {
+        if (DIRECTORY_SEPARATOR == '/' && !@ini_get('safe_mode')) {
+            return is_writable($path);
+        }
+
+        if (is_dir($path)) {
+            $path = rtrim($path, '/') . '/' . md5(mt_rand(1, 100) . mt_rand(1, 100));
+            if (($fp = @fopen($path, 'ab')) === false) {
+                return false;
+            }
+
+            fclose($fp);
+            @chmod($path, 0777);
+            @unlink($path);
+
+            return true;
+        } elseif (!is_file($path) || ($fp = @fopen($path, 'ab')) === false) {
+            return false;
+        }
+
+        fclose($fp);
+        return true;
+    }
+
+    /**
+     * 路径分隔符根据当前系统分隔符适配
+     * @param string $path 路径
+     * @return string 转换后的路径
+     */
+    public static function fsFit(string $path): string
+    {
+        return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
+    }
+
+    /**
+     * 解压Zip
+     * @param string $file ZIP文件路径
+     * @param string $dir  解压路径
+     * @return string 解压后的路径
+     * @throws Throwable
+     */
+    public static function unzip(string $file, string $dir = ''): string
+    {
+        if (!file_exists($file)) {
+            throw new RuntimeException("Zip file not found: {$file}");
+        }
+
+        $zip = new ZipArchive();
+        $result = $zip->open($file);
+        if ($result !== true) {
+            throw new RuntimeException("Unable to open the zip file, code: {$result}");
+        }
+
+        $dir = $dir ?: substr($file, 0, strripos($file, '.zip'));
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+
+        try {
+            if (!$zip->extractTo($dir)) {
+                throw new RuntimeException('Unable to extract ZIP file');
+            }
+        } finally {
+            $zip->close();
+        }
+        return $dir;
+    }
+
+    /**
+     * 创建ZIP
+     * @param array  $files    文件路径列表
+     * @param string $fileName ZIP文件名称
+     * @return bool
+     * @throws Throwable
+     */
+    public static function zip(array $files, string $fileName): bool
+    {
+        $zip = new ZipArchive();
+        if ($zip->open($fileName, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException("Unable to create zip file: {$fileName}");
+        }
+
+        try {
+            foreach ($files as $v) {
+                if (is_array($v) && isset($v['file']) && isset($v['name'])) {
+                    $filePath = base_path() . str_replace(base_path(), '', self::fsFit($v['file']));
+                    $zip->addFile($filePath, $v['name']);
+                } else {
+                    $saveFile = str_replace(base_path(), '', self::fsFit($v));
+                    $zip->addFile(base_path() . $saveFile, $saveFile);
+                }
+            }
+            if (!$zip->close()) {
+                throw new RuntimeException("Unable to package zip file: {$fileName}");
+            }
+        } catch (Throwable $e) {
+            $zip->close();
+            throw new RuntimeException("Unable to package zip file: {$e->getMessage()}, file: {$fileName}", 0, $e);
+        }
+
+        return file_exists($fileName);
+    }
+
+    /**
+     * 递归创建目录
+     * @param string $dir 目录路径
+     * @return bool
+     */
+    public static function mkdir(string $dir): bool
+    {
+        if (!is_dir($dir)) {
+            return mkdir($dir, 0755, true);
+        }
+        return false;
+    }
+
+    /**
+     * 获取一个目录内的文件列表
+     * @param string $dir    目录路径
+     * @param array  $suffix 要获取的文件列表的后缀
+     * @return array
+     */
+    public static function getDirFiles(string $dir, array $suffix = []): array
+    {
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($dir), RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        $fileList = [];
+        foreach ($files as $file) {
+            if ($file->isDir()) {
+                continue;
+            }
+            if (!empty($suffix) && !in_array($file->getExtension(), $suffix)) {
+                continue;
+            }
+            $filePath        = $file->getRealPath();
+            $name            = str_replace($dir, '', $filePath);
+            $name            = str_replace(DIRECTORY_SEPARATOR, "/", $name);
+            $fileList[$name] = $name;
+        }
+        return $fileList;
+    }
+
+    /**
+     * 将一个文件单位转为字节
+     * @param string $unit 将b、kb、m、mb、g、gb的单位转为 byte
+     * @return int byte
+     */
+    public static function fileUnitToByte(string $unit): int
+    {
+        preg_match('/([0-9.]+)(\w+)/', $unit, $matches);
+        if (!$matches) {
+            return 0;
+        }
+        $typeDict = ['b' => 0, 'k' => 1, 'kb' => 1, 'm' => 2, 'mb' => 2, 'gb' => 3, 'g' => 3];
+        return (int)($matches[1] * pow(1024, $typeDict[strtolower($matches[2])] ?? 0));
+    }
+}
