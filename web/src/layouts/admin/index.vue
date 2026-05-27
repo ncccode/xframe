@@ -21,6 +21,7 @@ import { useConfig } from '/@/stores/config'
 import { BEFORE_RESIZE_LAYOUT } from '/@/stores/constant/cacheKey'
 import { useNavTabs } from '/@/stores/navTabs'
 import { useSiteConfig } from '/@/stores/siteConfig'
+import { useTerminal } from '/@/stores/terminal'
 import { setNavTabsWidth } from '/@/utils/layout'
 import { getFirstRoute, handleAdminRoute, routePush } from '/@/utils/router'
 import { Session } from '/@/utils/storage'
@@ -34,6 +35,7 @@ const config = useConfig()
 const route = useRoute()
 const siteConfig = useSiteConfig()
 const adminInfo = useAdminInfo()
+const terminal = useTerminal()
 
 const state = reactive({
     autoMenuCollapseLock: false,
@@ -57,6 +59,8 @@ const init = () => {
      */
     index().then((res) => {
         siteConfig.dataFill(res.data.siteConfig)
+        terminal.changePackageManager(res.data.siteConfig.terminal?.npmPackageManager || 'pnpm')
+        terminal.changePHPDevelopmentServer(!!res.data.siteConfig.terminal?.phpDevelopmentServer)
         siteConfig.setInitialize(true)
 
         if (!isEmpty(res.data.adminInfo)) {

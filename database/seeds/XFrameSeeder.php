@@ -125,6 +125,12 @@ final class XFrameSeeder extends AbstractSeed
             [45, 42, 'button', '下载', 'system/errorLog/download', '', '', 'tab', '', '', 0, 0, ''],
             [46, 42, 'button', '删除', 'system/errorLog/del', '', '', 'tab', '', '', 0, 0, ''],
             [47, 42, 'button', '全部删除', 'system/errorLog/delall', '', '', 'tab', '', '', 0, 0, ''],
+            [48, 0, 'menu', '模块市场', 'moduleStore/moduleStore', 'moduleStore', 'el-icon-GoodsFilled', 'tab', '', '/src/views/admin/module/index.vue', 1, 90, ''],
+            [49, 48, 'button', '查看', 'module/index', '', '', 'tab', '', '', 0, 0, ''],
+            [50, 48, 'button', '安装', 'module/install', '', '', 'tab', '', '', 0, 0, ''],
+            [51, 48, 'button', '调整状态', 'module/change_state', '', '', 'tab', '', '', 0, 0, ''],
+            [52, 48, 'button', '卸载', 'module/uninstall', '', '', 'tab', '', '', 0, 0, ''],
+            [53, 48, 'button', '上传安装', 'module/upload', '', '', 'tab', '', '', 0, 0, ''],
         ];
 
         $insert = [];

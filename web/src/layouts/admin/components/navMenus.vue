@@ -71,6 +71,13 @@
             <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" v-else name="el-icon-FullScreen" size="18" />
         </div>
 
+        <!-- 终端 - 仅超管 -->
+        <div v-if="adminInfo.super" @click="terminal.toggle()" class="nav-menu-item pt2">
+            <el-badge :is-dot="terminal.state.showDot">
+                <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" name="local-terminal" size="26" />
+            </el-badge>
+        </div>
+
         <!-- 管理员信息 -->
         <el-popover
             v-if="siteConfig.userInitialize"
@@ -109,6 +116,7 @@
         </div>
 
         <Config />
+        <Terminal />
     </div>
 </template>
 
@@ -119,12 +127,14 @@ import { reactive, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Config from './config.vue'
 import { logout } from '/@/api/admin/index'
+import Terminal from '/@/components/terminal/index.vue'
 import { editDefaultLang } from '/@/lang'
 import router from '/@/router'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
 import { ADMIN_INFO } from '/@/stores/constant/cacheKey'
 import { useSiteConfig } from '/@/stores/siteConfig'
+import { useTerminal } from '/@/stores/terminal'
 import { fullUrl, timeFormat } from '/@/utils/common'
 import { Local } from '/@/utils/storage'
 import { hotUpdateState, reloadServer } from '/@/utils/vite'
@@ -133,6 +143,7 @@ const { t } = useI18n()
 
 const adminInfo = useAdminInfo()
 const configStore = useConfig()
+const terminal = useTerminal()
 const siteConfig = useSiteConfig()
 const reloadHotServerPopover = useTemplateRef('reloadHotServerPopover')
 

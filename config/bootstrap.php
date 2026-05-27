@@ -15,4 +15,5 @@
 return [
     support\bootstrap\Session::class,
     Webman\ThinkOrm\ThinkOrm::class,
+    app\common\bootstrap\ModuleBootstrap::class,
 ];

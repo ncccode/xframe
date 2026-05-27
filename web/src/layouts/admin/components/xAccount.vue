@@ -15,15 +15,9 @@
                     </div>
                     <p class="username">{{ xAccount.nickname }}</p>
                     <p class="user-info">
-                        <span>{{ $t('Integral') + ' ' + xAccount.score }}</span>
-                        <span>{{ $t('Balance') + ' ' + xAccount.money }}</span>
+                        <span>{{ xAccount.email || xAccount.mobile || xAccount.username }}</span>
                     </p>
                     <div class="userinfo-buttons">
-                        <a href="https://uni.xframe.com/user" target="_blank" rel="noopener noreferrer">
-                            <el-button v-blur size="default" type="primary">
-                                {{ $t('layouts.Member center') }}
-                            </el-button>
-                        </a>
                         <el-button @click="xAccount.logout()" v-blur size="default" type="warning">{{ $t('layouts.Logout') }}</el-button>
                     </div>
                 </div>
@@ -60,14 +54,6 @@
                             <el-button @click="onXAccountSubmitPre()" :loading="state.submitLoading" round type="primary" size="large">
                                 {{ t('layouts.Login') }}
                             </el-button>
-                            <a
-                                target="_blank"
-                                class="x-account-register"
-                                href="https://uni.xframe.com/user/login?type=register"
-                                rel="noopener noreferrer"
-                            >
-                                <el-button round plain type="info" size="large"> {{ t('layouts.Register') }} </el-button>
-                            </a>
                         </el-form-item>
                     </el-form>
                 </div>
@@ -81,16 +67,12 @@ import type { FormItemRule } from 'element-plus'
 import { reactive, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { xAccountCheckIn, xAccountGetUserInfo } from '/@/api/admin/index'
-import clickCaptcha from '/@/components/clickCaptcha'
 import FormItem from '/@/components/formItem/index.vue'
 import { useXAccount } from '/@/stores/xAccount'
-import { useSiteConfig } from '/@/stores/siteConfig'
-import { uuid } from '/@/utils/random'
 import { buildValidatorData } from '/@/utils/validate'
 
 const { t } = useI18n()
 const xAccount = useXAccount()
-const siteConfig = useSiteConfig()
 const model = defineModel<boolean>()
 const xAccountFormRef = useTemplateRef('xAccountFormRef')
 
@@ -109,8 +91,6 @@ const state = reactive({
         tab: 'login',
         username: '',
         password: '',
-        captchaId: uuid(),
-        captchaInfo: '',
         keep: false,
     },
 })
@@ -118,17 +98,17 @@ const state = reactive({
 const onXAccountSubmitPre = () => {
     xAccountFormRef.value?.validate((valid) => {
         if (valid) {
-            clickCaptcha(state.user.captchaId, (captchaInfo: string) => onXAccountSubmit(captchaInfo), { apiBaseURL: siteConfig.apiUrl })
+            onXAccountSubmit()
         }
     })
 }
 
-const onXAccountSubmit = (captchaInfo = '') => {
+const onXAccountSubmit = () => {
     state.submitLoading = true
-    state.user.captchaInfo = captchaInfo
     xAccountCheckIn(state.user)
         .then((res) => {
             xAccount.dataFill(res.data.userInfo, false)
+            state.loading = false
             props.loginCallback(res)
         })
         .finally(() => {
@@ -145,6 +125,7 @@ watch(
     () => model.value,
     (newVal) => {
         if (newVal && xAccount.token) {
+            state.loading = true
             xAccountGetUserInfo()
                 .then((res) => {
                     xAccount.dataFill(res.data.userInfo)
@@ -155,6 +136,8 @@ watch(
                 .finally(() => {
                     state.loading = false
                 })
+        } else {
+            state.loading = false
         }
     }
 )
@@ -210,9 +193,6 @@ watch(
     }
     .userinfo-buttons {
         margin-top: 10px;
-        a {
-            margin-right: 15px;
-        }
     }
 }
 

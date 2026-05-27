@@ -275,6 +275,37 @@ if (!function_exists('full_url')) {
     }
 }
 
+if (!function_exists('root_path')) {
+
+    /**
+     * ThinkPHP 风格根目录 helper，供模块包兼容层使用。
+     */
+    function root_path(string $path = ''): string
+    {
+        $root = rtrim(base_path(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return $path === '' ? $root : $root . ltrim($path, DIRECTORY_SEPARATOR);
+    }
+}
+
+if (!function_exists('parse_name')) {
+
+    /**
+     * ThinkPHP parse_name 的轻量兼容实现。
+     * type=0: CamelCase -> snake_case，type=1: snake_case -> PascalCase。
+     */
+    function parse_name(string $name, int $type = 0, bool $ucfirst = true): string
+    {
+        if ($type === 1) {
+            $name = str_replace(['-', '_'], ' ', $name);
+            $name = str_replace(' ', '', ucwords($name));
+            return $ucfirst ? ucfirst($name) : lcfirst($name);
+        }
+
+        $name = preg_replace('/(?<!^)[A-Z]/', '_$0', $name) ?: $name;
+        return strtolower(str_replace('-', '_', $name));
+    }
+}
+
 if (!function_exists('hash_password')) {
 
     /**

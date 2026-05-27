@@ -8,12 +8,14 @@ use support\think\Db;
 use support\think\Cache;
 use Webman\Event\Event;
 use app\admin\model\AdminLog;
+use core\utils\Terminal;
 use core\service\Upload;
 use app\common\controller\Admin;
 
 class Ajax extends Admin
 {
     protected array $noNeedPermission = ['*'];
+    protected array $noNeedLogin = ['terminal'];
 
     public function initialize(): void
     {
@@ -201,6 +203,15 @@ class Ajax extends Admin
         ]);
     }
 
+    public function changeTerminalConfig(): Response
+    {
+        AdminLog::instance()->setTitle(__('Change terminal config'));
+        if (Terminal::changeTerminalConfig()) {
+            return $this->success();
+        }
+        return $this->error(__('Failed to modify the terminal configuration. Please modify the configuration file manually:%s', ['/config/terminal.php']));
+    }
+
     public function clearCache(): Response
     {
         AdminLog::instance()->setTitle(__('Clear cache'));
@@ -212,5 +223,15 @@ class Ajax extends Admin
         }
         Event::emit('cacheClearAfter', $this->request);
         return $this->success(__('Cache cleaned~'));
+    }
+
+    /**
+     * Web 终端，内部会校验超级管理员权限。
+     *
+     * @throws Throwable
+     */
+    public function terminal(): Response
+    {
+        return (new Terminal())->exec();
     }
 }

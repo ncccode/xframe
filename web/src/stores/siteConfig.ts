@@ -12,6 +12,10 @@ export const useSiteConfig = defineStore('siteConfig', {
             upload: {
                 mode: 'local',
             },
+            terminal: {
+                npmPackageManager: 'pnpm',
+                phpDevelopmentServer: false,
+            },
             headNav: [],
             recordNumber: '',
             cdnUrlParams: '',

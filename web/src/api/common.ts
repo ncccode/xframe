@@ -19,6 +19,8 @@ import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
 export const adminUploadUrl = '/admin/ajax/upload'
 export const adminBuildSuffixSvgUrl = adminBaseRoutePath + '/ajax/buildSuffixSvg'
 export const adminAreaUrl = '/admin/ajax/area'
+export const terminalUrl = adminBaseRoutePath + '/ajax/terminal'
+export const changeTerminalConfigUrl = adminBaseRoutePath + '/ajax/changeTerminalConfig'
 
 // 公共
 export const clickCaptchaUrl = '/api/common/clickCaptcha'
@@ -100,6 +102,37 @@ export function getArea(values: number[]) {
         url: adminAreaUrl,
         method: 'GET',
         params: params,
+    })
+}
+
+/**
+ * 构建命令执行窗口 URL
+ */
+export function buildTerminalUrl(commandKey: string, uuid: string, extend: string) {
+    const adminInfo = useAdminInfo()
+    return (
+        getUrl() +
+        terminalUrl +
+        '?command=' +
+        encodeURIComponent(commandKey) +
+        '&uuid=' +
+        encodeURIComponent(uuid) +
+        '&extend=' +
+        encodeURIComponent(extend) +
+        '&xtoken=' +
+        encodeURIComponent(adminInfo.getToken()) +
+        '&server=1'
+    )
+}
+
+/**
+ * 修改终端配置
+ */
+export function postChangeTerminalConfig(data: { manager?: string; port?: string }) {
+    return createAxios({
+        url: changeTerminalConfigUrl,
+        method: 'POST',
+        data,
     })
 }
 

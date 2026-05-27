@@ -42,6 +42,10 @@ class Index extends Admin
                 'upload'       => \keys_to_camel_case(\get_upload_config(), ['max_size', 'save_name', 'allowed_suffixes', 'allowed_mime_types']),
                 'cdnUrl'       => \full_url(),
                 'cdnUrlParams' => Config::get('xframe.cdn_url_params'),
+                'terminal'     => [
+                    'npmPackageManager'    => Config::get('terminal.npm_package_manager', 'pnpm'),
+                    'phpDevelopmentServer' => PHP_SAPI === 'cli' && DIRECTORY_SEPARATOR === '/' && function_exists('proc_open'),
+                ],
             ]
         ]);
     }

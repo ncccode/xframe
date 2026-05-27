@@ -1,0 +1,28 @@
+<?php
+
+return [
+    'Module already exists'                                     => 'Module already exists',
+    'package download failed'                                   => 'Package download failed',
+    'module store request failed'                               => 'Module store request failed',
+    'module store response error'                               => 'Module store response error',
+    'No permission to write temporary files'                    => 'No permission to write temporary files',
+    'Zip file not found'                                        => 'Zip file not found',
+    'Unable to open the zip file'                               => 'Unable to open the zip file',
+    'Unable to extract ZIP file'                                => 'Unable to extract ZIP file',
+    'Unable to package zip file'                                => 'Unable to package zip file',
+    'Basic configuration of the Module is incomplete'           => 'Basic configuration of the module is incomplete',
+    'Module package file does not exist'                        => 'Module package file does not exist',
+    'Module file conflicts'                                     => 'Module file conflicts',
+    'Configuration file has no write permission'                => 'Configuration file has no write permission',
+    'The current state of the module cannot be set to disabled' => 'The current state of the module cannot be set to disabled',
+    'The current state of the module cannot be set to enabled'  => 'The current state of the module cannot be set to enabled',
+    'Module file updated'                                       => 'Module file updated',
+    'Please disable the module first'                           => 'Please disable the module first',
+    'Please disable the module before updating'                 => 'Please disable the module before updating',
+    'The directory required by the module is occupied'          => 'The directory required by the module is occupied',
+    'Install module'                                            => 'Install module',
+    'Unload module'                                             => 'Unload module',
+    'Change module state'                                       => 'Change module state',
+    'Upload install module'                                     => 'Upload install module',
+    'composer config %s conflict'                               => 'composer config %s conflict',
+];

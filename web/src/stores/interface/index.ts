@@ -162,6 +162,48 @@ export interface UserInfo {
     refresh_token: string
 }
 
+export interface TaskItem {
+    // 任务唯一标识
+    uuid: string
+    // 创建时间
+    createTime: string
+    // 状态
+    status: number
+    // 命令
+    command: string
+    // 命令执行日志
+    message: string[]
+    // 显示命令执行日志
+    showMessage: boolean
+    // 失败阻断后续命令执行
+    blockOnFailure: boolean
+    // 扩展信息，自动发送到后台
+    extend: string
+    // 执行结果回调
+    callback: Function
+}
+
+export interface Terminal {
+    // 显示终端窗口
+    show: boolean
+    // 在后台终端按钮上显示一个红点
+    showDot: boolean
+    // 任务列表
+    taskList: TaskItem[]
+    // 包管理器
+    packageManager: string
+    // 显示终端设置窗口
+    showConfig: boolean
+    // 开始任务时自动清理已完成任务
+    automaticCleanupTask: string
+    // PHP 开发服务环境
+    phpDevelopmentServer: boolean
+    // NPM 源
+    npmRegistry: string
+    // composer 源
+    composerRegistry: string
+}
+
 export interface SiteConfig {
     // 站点名称
     siteName: string
@@ -175,6 +217,11 @@ export interface SiteConfig {
     upload: {
         mode: string
         [key: string]: any
+    }
+    // Web 终端配置
+    terminal?: {
+        npmPackageManager?: string
+        phpDevelopmentServer?: boolean
     }
     // 顶部导航菜单数据
     headNav: RouteRecordRaw[]
