@@ -99,8 +99,15 @@ export const useTerminal = defineStore(
             })
         }
 
+        function hasBlockingFailedTask() {
+            return state.taskList.some((item) => {
+                return (item.status == taskStatus.Failed || item.status == taskStatus.Unknown) && item.blockOnFailure
+            })
+        }
+
         function addTask(command: string, blockOnFailure = true, extend = '', callback: Function = () => {}) {
             if (!state.show) toggleDot(true)
+            const blocked = hasBlockingFailedTask()
             state.taskList = state.taskList.concat({
                 uuid: uuid(),
                 createTime: timeFormat(),
@@ -119,24 +126,20 @@ export const useTerminal = defineStore(
             }
 
             // 检查是否有已经失败的任务
-            if (state.show === false) {
-                for (const key in state.taskList) {
-                    if (state.taskList[key].status == taskStatus.Failed || state.taskList[key].status == taskStatus.Unknown) {
-                        ElNotification({
-                            type: 'error',
-                            message: i18n.global.t('terminal.Newly added tasks will never start because they are blocked by failed tasks'),
-                            zIndex: SYSTEM_ZINDEX,
-                        })
-                        break
-                    }
-                }
+            if (blocked && state.show === false) {
+                ElNotification({
+                    type: 'error',
+                    message: i18n.global.t('terminal.Newly added tasks will never start because they are blocked by failed tasks'),
+                    zIndex: SYSTEM_ZINDEX,
+                })
             }
 
             startTask()
+            return !blocked
         }
 
         function addTaskPM(command: string, blockOnFailure = true, extend = '', callback: Function = () => {}) {
-            addTask(command + '.' + state.packageManager, blockOnFailure, extend, callback)
+            return addTask(command + '.' + state.packageManager, blockOnFailure, extend, callback)
         }
 
         function delTask(idx: number) {
@@ -275,6 +278,7 @@ export const useTerminal = defineStore(
             setTaskStatus,
             setTaskShowMessage,
             addTaskMessage,
+            hasBlockingFailedTask,
             addTask,
             addTaskPM,
             delTask,

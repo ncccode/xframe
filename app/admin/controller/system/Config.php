@@ -220,6 +220,15 @@ class Config extends AdminController
             }
 
             $data   = $this->excludeFields($data);
+            $data['name'] = isset($data['name']) ? trim((string) $data['name']) : '';
+            if (!$data['name']) {
+                return $this->error(__('Parameter %s can not be empty', [__('Variable name')]));
+            }
+
+            if ($this->model->where('name', $data['name'])->find()) {
+                return $this->error(__('Variable name already exists'));
+            }
+
             if (!isset($data['group']) || !in_array((string) $data['group'], $scope['groups'], true)) {
                 return $this->error(__('You have no permission'));
             }
@@ -241,6 +250,10 @@ class Config extends AdminController
                 $this->model->commit();
             } catch (Throwable $e) {
                 $this->model->rollback();
+                if (str_contains((string) $e->getMessage(), 'Duplicate entry')
+                    || str_contains((string) $e->getMessage(), 'duplicate key value')) {
+                    return $this->error(__('Variable name already exists'));
+                }
                 return $this->error($e->getMessage());
             }
 

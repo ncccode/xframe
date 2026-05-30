@@ -133,13 +133,15 @@ export const customHotUpdate = (): Plugin => {
 
                 syncHotUpdateState(server)
 
-                // 文件添加时通知客户端新增了脏文件（文件删除无需记录为脏文件）
-                server.watcher.on('add', () => {
+                // 文件增删时通知客户端有脏文件，模块禁用/卸载会删除前端路由和菜单入口文件。
+                const markDirtyFile = () => {
                     if (hotUpdateState.listenDirtyFileSwitch) {
                         hotUpdateState.dirtyFile = true
                         syncHotUpdateState(server)
                     }
-                })
+                }
+                server.watcher.on('add', markDirtyFile)
+                server.watcher.on('unlink', markDirtyFile)
             })
 
             // 开启热更新

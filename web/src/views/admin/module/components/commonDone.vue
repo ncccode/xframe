@@ -5,6 +5,7 @@
                 {{ t('module.Congratulations, module installation is complete') }}
             </span>
             <span v-else-if="state.common.moduleState == moduleInstallState.DISABLE">{{ t('module.Module is disabled') }}</span>
+            <span v-else-if="state.common.moduleState == moduleInstallState.UNINSTALLED">{{ t('module.Module has been uninstalled') }}</span>
             <span v-else-if="state.common.moduleState == moduleInstallState.DEPENDENT_WAIT_INSTALL">
                 {{ t('module.Congratulations, the code of the module is ready') }}
             </span>
@@ -59,17 +60,19 @@
         <div class="install-tis-box">
             <div class="install-tis">
                 {{ t('module.please') }}
-                {{ state.common.moduleState == moduleInstallState.DISABLE ? '' : t('module.After installation 1') }}
+                {{ isRemoveFlow ? '' : t('module.After installation 1') }}
                 {{ t('module.Manually clean up the system and browser cache') }}
+            </div>
+        </div>
+        <div v-if="state.common.requiresWebRebuild" class="install-tis-box">
+            <div class="install-tis color-red">
+                {{ t('module.Frontend update detected') }}
             </div>
         </div>
         <div class="install-tis-box">
             <div class="install-form">
                 <FormItem
-                    :label="
-                        (state.common.moduleState == moduleInstallState.DISABLE ? '' : t('module.After installation 2')) +
-                        t('module.Automatically execute reissue command?')
-                    "
+                    :label="(isRemoveFlow ? '' : t('module.After installation 2')) + t('module.Automatically execute reissue command?')"
                     v-model="form.rebuild"
                     type="radio"
                     :input-attr="{
@@ -79,9 +82,9 @@
                 />
             </div>
         </div>
-        <div class="install-tis-box" v-if="hotUpdateState.dirtyFile && state.common.moduleState != moduleInstallState.DISABLE">
+        <div class="install-tis-box" v-if="showHotServerRestart">
             <div class="install-form">
-                <el-form-item :label="t('module.After installation 2') + t('module.Restart Vite hot server')">
+                <el-form-item :label="(isRemoveFlow ? '' : t('module.After installation 2')) + t('module.Restart Vite hot server')">
                     <FormInput
                         v-model="form.reloadHotServer"
                         type="radio"
@@ -124,7 +127,7 @@
                 :loading="state.loading.common"
                 @click="onSubmitInstallDone"
             >
-                {{ state.common.moduleState == moduleInstallState.DISABLE ? t('Complete') : t('module.End of installation') }}
+                {{ isRemoveFlow ? t('Complete') : t('module.End of installation') }}
             </el-button>
         </div>
     </div>
@@ -132,7 +135,7 @@
 
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus'
-import { reactive } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onRefreshTableData } from '../index'
 import { state } from '../store'
@@ -150,6 +153,21 @@ const form = reactive({
     rebuild: 0,
     reloadHotServer: 0,
 })
+const showHotServerRestart = computed(() => {
+    return hotUpdateState.dirtyFile || state.common.requiresWebRebuild
+})
+const isRemoveFlow = computed(() => {
+    return [moduleInstallState.DISABLE, moduleInstallState.UNINSTALLED].includes(state.common.moduleState)
+})
+
+watch(
+    () => [state.common.requiresWebRebuild, hotUpdateState.dirtyFile, state.common.type, state.common.moduleState],
+    () => {
+        form.rebuild = state.common.requiresWebRebuild ? 1 : 0
+        form.reloadHotServer = showHotServerRestart.value ? 1 : 0
+    },
+    { immediate: true }
+)
 
 const showTerminal = () => {
     terminal.toggle(true)
@@ -162,12 +180,12 @@ const onSubmitInstallDone = () => {
         terminal.addTaskPM('web-build', false, '', (res: number) => {
             if (res == taskStatus.Success) {
                 terminal.toggle(false)
-                if (form.reloadHotServer == 1 && state.common.moduleState != moduleInstallState.DISABLE) {
+                if (form.reloadHotServer == 1) {
                     reloadServer('modules')
                 }
             }
         })
-    } else if (form.reloadHotServer == 1 && state.common.moduleState != moduleInstallState.DISABLE) {
+    } else if (form.reloadHotServer == 1) {
         reloadServer('modules')
     }
 }

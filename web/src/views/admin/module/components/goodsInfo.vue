@@ -189,7 +189,7 @@
 <script setup lang="ts">
 import { ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
-import { onDisable, onEnable, onPreInstallModule, onRefreshTableData } from '../index'
+import { onDisable, onEnable, onPreInstallModule, onRefreshTableData, showModuleChangeDone } from '../index'
 import { state } from '../store'
 import { moduleInstallState } from '../types'
 import { getInstallState, postUninstall } from '/@/api/admin/module'
@@ -229,9 +229,9 @@ const onChangeState = () => {
 const unInstall = (uid: string) => {
     state.loading.common = true
     postUninstall(uid)
-        .then(() => {
+        .then((res) => {
+            showModuleChangeDone(uid, moduleInstallState.UNINSTALLED, !!(res.data?.info?.requires_web_rebuild ?? true))
             onRefreshTableData()
-            state.dialog.goodsInfo = false
         })
         .finally(() => {
             state.loading.common = false

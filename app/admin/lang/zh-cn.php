@@ -59,6 +59,7 @@ return [
     'Please delete the child element first, or use batch deletion'                        => '请首先删除子元素，或使用批量删除！',
     'Please input correct rule name'                                                      => '请输入正确的权限节点名称',
     'Rule name already exists'                                                            => '权限节点名称已存在',
+    'Variable name already exists'                                                        => '变量名已存在',
     'Configuration write failed: %s'                                                      => '配置写入失败：%s',
     'Variable name'                                                                        => '变量名',
     'Basics'                                                                               => '基础配置',

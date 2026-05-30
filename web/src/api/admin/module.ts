@@ -88,18 +88,13 @@ export function postInstallModule(uid: string, versionId: number, version: strin
 }
 
 export function postUninstall(uid: string) {
-    return createAxios(
-        {
-            url: moduleControllerUrl + 'uninstall',
-            method: 'post',
-            params: {
-                uid: uid,
-            },
+    return createAxios({
+        url: moduleControllerUrl + 'uninstall',
+        method: 'post',
+        params: {
+            uid: uid,
         },
-        {
-            showSuccessMessage: true,
-        }
-    )
+    })
 }
 
 export function changeState(params: anyObj) {

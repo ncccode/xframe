@@ -14,6 +14,7 @@ export default {
     // commonDone
     'Congratulations, module installation is complete': '恭喜，模块安装已完成。',
     'Module is disabled': '模块已禁用。',
+    'Module has been uninstalled': '模块已卸载。',
     'Congratulations, the code of the module is ready': '恭喜，模块的代码已经准备好了。',
     'Unknown state': '未知状态。',
     'Do not refresh the page!': '请勿刷新页面！',
@@ -29,6 +30,7 @@ export default {
     'Manually clean up the system and browser cache': '手动的清理系统和浏览器缓存。',
     'After installation 2': '安装结束后',
     'Automatically execute reissue command?': '自动执行重新发布命令？',
+    'Frontend update detected': '检测到模块更新了前端代码或后台应用入口，建议重新发布前端。',
     'End of installation': '安装结束',
     'Dependency installation fail 1': '依赖安装失败，请点击',
     'Dependency installation fail 2': '终端',

@@ -1,5 +1,6 @@
 import { ElNotification } from 'element-plus'
 import { isArray } from 'lodash-es'
+import { nextTick } from 'vue'
 import { state } from './store'
 import { moduleInstallState, type moduleState } from './types'
 import { changeState, getInstallState, index, info, modules, postInstallModule, preDownload } from '/@/api/admin/module'
@@ -165,6 +166,21 @@ export const showCommonLoading = (loadingTitle: moduleState['common']['loadingTi
     state.common.type = 'loading'
     state.common.loadingTitle = loadingTitle
     state.common.loadingComponentKey = uuid()
+    state.common.requiresWebRebuild = false
+}
+
+export const showModuleChangeDone = (uid: string, moduleState: moduleInstallState, requiresWebRebuild: boolean) => {
+    state.dialog.goodsInfo = false
+    state.common.uid = uid
+    state.common.type = 'done'
+    state.common.dialogTitle = moduleState === moduleInstallState.UNINSTALLED ? i18n.global.t('module.uninstall') : i18n.global.t('Disable')
+    state.common.moduleState = moduleState
+    state.common.dependInstallState = 'none'
+    state.common.waitInstallDepend = []
+    state.common.requiresWebRebuild = requiresWebRebuild
+    nextTick(() => {
+        state.dialog.common = true
+    })
 }
 
 /**
@@ -246,7 +262,9 @@ export const onPreInstallModule = (uid: string, id: number, needGetInstallableVe
  */
 export const execInstall = (uid: string, id: number, version: string = '', update: boolean = false, extend: anyObj = {}) => {
     postInstallModule(uid, id, version, update, extend)
-        .then(() => {
+        .then((res) => {
+            state.common.uid = res.data.data?.uid || uid
+            state.common.requiresWebRebuild = !!res.data.data?.requires_web_rebuild
             state.common.dialogTitle = i18n.global.t('module.Installation complete')
             state.common.moduleState = moduleInstallState.INSTALLED
             state.common.type = 'done'
@@ -262,25 +280,29 @@ export const execInstall = (uid: string, id: number, version: string = '', updat
             } else if (res.code == -2) {
                 state.common.type = 'done'
                 state.common.uid = res.data.uid
+                state.common.requiresWebRebuild = !!res.data.requires_web_rebuild
                 state.common.dialogTitle = i18n.global.t('module.Wait for dependent installation')
                 state.common.moduleState = moduleInstallState.DEPENDENT_WAIT_INSTALL
-                state.common.waitInstallDepend = res.data.wait_install
+                state.common.waitInstallDepend = [...res.data.wait_install]
                 state.common.dependInstallState = 'executing'
                 const terminal = useTerminal()
                 if (res.data.wait_install.includes('npm_dependent_wait_install')) {
-                    terminal.addTaskPM('web-install', true, 'module-install:' + res.data.uid, (res: number) => {
+                    const taskWillStart = terminal.addTaskPM('web-install', true, 'module-install:' + res.data.uid, (res: number) => {
                         terminalTaskExecComplete(res, 'npm_dependent_wait_install')
                     })
+                    if (!taskWillStart) terminalTaskExecComplete(taskStatus.Failed, 'npm_dependent_wait_install')
                 }
                 if (res.data.wait_install.includes('nuxt_npm_dependent_wait_install')) {
-                    terminal.addTaskPM('nuxt-install', true, 'module-install:' + res.data.uid, (res: number) => {
+                    const taskWillStart = terminal.addTaskPM('nuxt-install', true, 'module-install:' + res.data.uid, (res: number) => {
                         terminalTaskExecComplete(res, 'nuxt_npm_dependent_wait_install')
                     })
+                    if (!taskWillStart) terminalTaskExecComplete(taskStatus.Failed, 'nuxt_npm_dependent_wait_install')
                 }
                 if (res.data.wait_install.includes('composer_dependent_wait_install')) {
-                    terminal.addTask('composer.update', true, 'module-install:' + res.data.uid, (res: number) => {
+                    const taskWillStart = terminal.addTask('composer.update', true, 'module-install:' + res.data.uid, (res: number) => {
                         terminalTaskExecComplete(res, 'composer_dependent_wait_install')
                     })
+                    if (!taskWillStart) terminalTaskExecComplete(taskStatus.Failed, 'composer_dependent_wait_install')
                 }
             } else if (res.code == 0) {
                 ElNotification({
@@ -343,13 +365,12 @@ export const onDisable = (confirmConflict = false) => {
     }
 
     changeState(state.common.disableParams)
-        .then(() => {
-            ElNotification({
-                type: 'success',
-                message: i18n.global.t('module.The operation succeeds Please clear the system cache and refresh the browser ~'),
-                zIndex: SYSTEM_ZINDEX,
-            })
-            state.dialog.common = false
+        .then((res) => {
+            showModuleChangeDone(
+                state.common.disableParams.uid || state.goodsInfo.uid || '',
+                moduleInstallState.DISABLE,
+                !!res.data.info?.requires_web_rebuild
+            )
             onRefreshTableData()
         })
         .catch((res) => {
@@ -372,6 +393,8 @@ export const onDisable = (confirmConflict = false) => {
                 const commandsData = {
                     type: 'disable',
                     commands: res.data.wait_install,
+                    uid: res.data.uid,
+                    requiresWebRebuild: !!res.data.requires_web_rebuild,
                 }
                 state.common.uid = state.goodsInfo.uid
                 execCommand(commandsData)
@@ -432,7 +455,10 @@ export const execCommand = (data: anyObj) => {
         state.common.type = 'done'
         state.common.dialogTitle = i18n.global.t('module.Wait for dependent installation')
         state.common.moduleState = moduleInstallState.DISABLE
+        state.common.uid = data.uid || state.common.uid
+        state.common.requiresWebRebuild = !!data.requiresWebRebuild
         state.common.dependInstallState = 'executing'
+        state.common.waitInstallDepend = []
         const terminal = useTerminal()
         data.commands.forEach((item: anyObj) => {
             state.common.waitInstallDepend.push(item.type)
@@ -440,16 +466,23 @@ export const execCommand = (data: anyObj) => {
                 if (item.command == 'web-install') {
                     changeListenDirtyFileSwitch(false)
                 }
-                terminal.addTaskPM(item.command, true, '', (res: number) => {
+                const taskWillStart = terminal.addTaskPM(item.command, true, '', (res: number) => {
                     terminalTaskExecComplete(res, item.type)
                     if (item.command == 'web-install') {
                         changeListenDirtyFileSwitch(true)
                     }
                 })
+                if (!taskWillStart) {
+                    terminalTaskExecComplete(taskStatus.Failed, item.type)
+                    if (item.command == 'web-install') {
+                        changeListenDirtyFileSwitch(true)
+                    }
+                }
             } else {
-                terminal.addTask(item.command, true, '', (res: number) => {
+                const taskWillStart = terminal.addTask(item.command, true, '', (res: number) => {
                     terminalTaskExecComplete(res, item.type)
                 })
+                if (!taskWillStart) terminalTaskExecComplete(taskStatus.Failed, item.type)
             }
         })
     }

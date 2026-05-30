@@ -14,6 +14,7 @@ export default {
     // commonDone
     'Congratulations, module installation is complete': 'Congratulations, module installation is complete.',
     'Module is disabled': 'Module is disabled.',
+    'Module has been uninstalled': 'Module has been uninstalled.',
     'Congratulations, the code of the module is ready': 'Congratulations, the code of the module is ready.',
     'Unknown state': 'Unknown state.',
     'Do not refresh the page!': 'Do not refresh the page!',
@@ -30,6 +31,7 @@ export default {
     'Manually clean up the system and browser cache': 'Manually clean up the system and browser cache.',
     'After installation 2': 'After installation',
     'Automatically execute reissue command?': 'Automatically execute reissue command?',
+    'Frontend update detected': 'Frontend code or backend app entry changes were detected. Rebuilding the frontend is recommended.',
     'End of installation': 'End of installation',
     'Dependency installation fail 1': 'The dependency installation failed. Please click the retry button in the ',
     'Dependency installation fail 2': 'terminal',

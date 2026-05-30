@@ -57,6 +57,7 @@ export interface moduleState {
         disableDependConflict: anyObj[]
         disableParams: anyObj
         update: boolean
+        requiresWebRebuild: boolean
         versions: anyObj[]
     }
     sysVersion: string

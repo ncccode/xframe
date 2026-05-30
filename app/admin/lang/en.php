@@ -38,6 +38,7 @@ return [
     'Please use the %s field to sort before operating'                                    => 'Please use the %s field to sort before operating',
     'Please input correct rule name'                                                       => 'Please input correct rule name',
     'Rule name already exists'                                                            => 'Rule name already exists',
+    'Variable name already exists'                                                        => 'Variable name already exists',
     'Topic format error'                                                                  => 'Upload topic format error',
     'Driver %s not supported'                                                             => 'Driver %s not supported',
     'Configuration write failed: %s'                                                       => 'Configuration write failed: %s',

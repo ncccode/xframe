@@ -105,13 +105,15 @@ class Module extends Admin
             return $this->error(__('Parameter error'));
         }
         try {
-            Manage::instance($uid)->uninstall();
+            $info = Manage::instance($uid)->uninstall();
         } catch (Exception $e) {
             return $this->error(__($e->getMessage()), $e->getData(), $e->getCode());
         } catch (Throwable $e) {
             return $this->error(__($e->getMessage()));
         }
-        return $this->success();
+        return $this->success('', [
+            'info' => $info,
+        ]);
     }
 
     public function upload(): Response

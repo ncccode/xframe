@@ -42,6 +42,7 @@ export const state = reactive<moduleState>({
         disableDependConflict: [],
         disableParams: {},
         update: false,
+        requiresWebRebuild: false,
         versions: [],
     },
     sysVersion: '',

@@ -9,6 +9,7 @@ use core\utils\Exception;
 use core\utils\Filesystem;
 use FilesystemIterator;
 use Webman\Config;
+use support\think\Db;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
 
@@ -49,6 +50,11 @@ class Manage
      * @var string 模板根目录
      */
     protected string $modulesDir;
+
+    /**
+     * @var bool 当前安装流程是否需要重新构建前端
+     */
+    protected bool $requiresWebRebuild = false;
 
     /**
      * 初始化
@@ -356,6 +362,8 @@ class Manage
         $state   = $this->getInstallState();
         $info    = $this->getInfo();
         $runtime = Server::getRuntime($this->modulesDir);
+        $this->requiresWebRebuild = $this->requiresFrontendUpdate();
+        $info['requires_web_rebuild'] = $this->requiresWebRebuild;
 
         // 模块包已经位于本地待安装状态时，下载/上传阶段已经完成来源校验。
         // 后续使用本地依赖、冲突和 SQL 检查，避免重复市场预检把已下载的包判为“不可用”。
@@ -428,7 +436,7 @@ class Manage
      * 卸载
      * @throws Throwable
      */
-    public function uninstall(): void
+    public function uninstall(): array
     {
         $info = $this->getInfo();
         if ($info['state'] != self::DISABLE) {
@@ -436,13 +444,20 @@ class Manage
                 'uid' => $this->uid,
             ]);
         }
+        $requiresWebRebuild = $this->requiresFrontendUpdate();
 
         // 执行卸载脚本
         Server::execEvent($this->uid, 'uninstall');
 
+        $this->removeModuleAdminRules();
+
         $this->removeBackendAppsConfig();
 
         Filesystem::delDir($this->modulesDir);
+
+        return [
+            'requires_web_rebuild' => $requiresWebRebuild,
+        ];
     }
 
     /**
@@ -512,6 +527,7 @@ class Manage
         $dependConflictSolution = request()->post("dependConflictSolution/a", []);
 
         $info    = $this->getInfo();
+        $requiresWebRebuild = $this->requiresFrontendUpdate();
         $zipFile = $this->backupsDir . $this->uid . '-install.zip';
         $zipDir  = false;
         if (is_file($zipFile)) {
@@ -713,10 +729,12 @@ class Manage
 
         if ($dependWaitInstall) {
             throw new Exception('dependent wait install', -2, [
-                'uid'          => $this->uid,
-                'wait_install' => $dependWaitInstall,
+                'uid'                  => $this->uid,
+                'wait_install'         => $dependWaitInstall,
+                'requires_web_rebuild' => $requiresWebRebuild,
             ]);
         }
+        $info['requires_web_rebuild'] = $requiresWebRebuild;
         return $info;
     }
 
@@ -947,14 +965,307 @@ class Manage
             }
             if ($waitInstall) {
                 throw new Exception('dependent wait install', -2, [
-                    'uid'          => $this->uid,
-                    'state'        => self::DEPENDENT_WAIT_INSTALL,
-                    'wait_install' => $waitInstall,
+                    'uid'                  => $this->uid,
+                    'state'                => self::DEPENDENT_WAIT_INSTALL,
+                    'wait_install'         => $waitInstall,
+                    'requires_web_rebuild' => $this->requiresWebRebuild,
                 ]);
             } else {
                 $this->setInfo([
                     'state' => self::INSTALLED,
                 ]);
+            }
+        }
+    }
+
+    private function requiresFrontendUpdate(): bool
+    {
+        foreach (['web', 'web-nuxt'] as $dir) {
+            if (is_dir($this->modulesDir . $dir)) {
+                return true;
+            }
+        }
+
+        if (is_file($this->modulesDir . 'webBootstrap.stub')) {
+            return true;
+        }
+
+        foreach (['dependencies', 'devDependencies', 'nuxtDependencies', 'nuxtDevDependencies'] as $key) {
+            if (Server::getConfig($this->modulesDir, $key)) {
+                return true;
+            }
+        }
+
+        return (bool)$this->getModuleBackendApps();
+    }
+
+    private function removeModuleAdminRules(): void
+    {
+        $ruleNames = $this->getModuleAdminRuleNamesFromSql();
+        if (!$ruleNames) {
+            return;
+        }
+
+        $ids = $this->collectAdminRuleIdsByNames($ruleNames);
+        if (!$ids) {
+            return;
+        }
+
+        Db::name('admin_rule')->whereIn('id', $ids)->delete();
+        $this->removeAdminRuleIdsFromGroups($ids);
+    }
+
+    private function getModuleAdminRuleNamesFromSql(): array
+    {
+        $sqlFile = $this->modulesDir . 'install.sql';
+        if (!is_file($sqlFile)) {
+            return [];
+        }
+
+        $sql = (string)file_get_contents($sqlFile);
+        if ($sql === '' || stripos($sql, 'admin_rule') === false) {
+            return [];
+        }
+
+        $names = [];
+        if (preg_match_all('/INSERT\s+(?:IGNORE\s+)?INTO\s+`?(?:__PREFIX__)?admin_rule`?\s*\(([^)]*)\)\s*VALUES\s*(.*?);/is', $sql, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $columns = array_map(
+                    function ($column) {
+                        return trim(trim($column), " \t\n\r\0\x0B`'\"");
+                    },
+                    explode(',', $match[1])
+                );
+                $nameIndex = array_search('name', $columns, true);
+                if ($nameIndex === false) {
+                    continue;
+                }
+
+                foreach ($this->parseSqlInsertRows($match[2]) as $row) {
+                    if (isset($row[$nameIndex]) && $row[$nameIndex] !== '') {
+                        $names[] = $row[$nameIndex];
+                    }
+                }
+            }
+        }
+
+        if (preg_match_all('/INSERT\s+(?:IGNORE\s+)?INTO\s+`?(?:__PREFIX__)?admin_rule`?\s*\(([^)]*)\)\s*(SELECT\s+.*?);/is', $sql, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $columns = array_map(
+                    function ($column) {
+                        return trim(trim($column), " \t\n\r\0\x0B`'\"");
+                    },
+                    explode(',', $match[1])
+                );
+                $nameIndex = array_search('name', $columns, true);
+                if ($nameIndex === false) {
+                    continue;
+                }
+
+                $select = $match[2];
+                $selectHead = preg_split('/\s+FROM\s+/i', $select, 2)[0] ?? '';
+                $selectHead = preg_replace('/^\s*SELECT\s+/i', '', $selectHead);
+                $selectColumns = $this->splitSqlCsv($selectHead);
+                if (isset($selectColumns[$nameIndex])) {
+                    $name = $this->quotedSqlStringValue($selectColumns[$nameIndex]);
+                    if ($name !== '') {
+                        $names[] = $name;
+                    }
+                }
+
+                if (preg_match_all('/\'((?:\\\\.|\'\'|[^\'])*)\'\s+AS\s+`?name`?/i', $select, $nameMatches)) {
+                    foreach ($nameMatches[1] as $name) {
+                        $names[] = str_replace("''", "'", stripslashes($name));
+                    }
+                }
+                if (preg_match_all('/UNION\s+ALL\s+SELECT\s+\'(?:\\\\.|\'\'|[^\'])*\'\s*,\s*\'(?:\\\\.|\'\'|[^\'])*\'\s*,\s*\'((?:\\\\.|\'\'|[^\'])*)\'/i', $select, $unionMatches)) {
+                    foreach ($unionMatches[1] as $name) {
+                        $names[] = str_replace("''", "'", stripslashes($name));
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($names)));
+    }
+
+    private function splitSqlCsv(string $sql): array
+    {
+        $items = [];
+        $length = strlen($sql);
+        $inString = false;
+        $escape = false;
+        $depth = 0;
+        $value = '';
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $sql[$i];
+            if ($inString) {
+                $value .= $char;
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($char === "'") {
+                    if (($sql[$i + 1] ?? '') === "'") {
+                        $value .= $sql[$i + 1];
+                        $i++;
+                        continue;
+                    }
+                    $inString = false;
+                }
+                continue;
+            }
+
+            if ($char === "'") {
+                $inString = true;
+                $value .= $char;
+                continue;
+            }
+            if ($char === '(') {
+                $depth++;
+            } elseif ($char === ')' && $depth > 0) {
+                $depth--;
+            }
+            if ($char === ',' && $depth === 0) {
+                $items[] = trim($value);
+                $value = '';
+                continue;
+            }
+            $value .= $char;
+        }
+        if (trim($value) !== '') {
+            $items[] = trim($value);
+        }
+
+        return $items;
+    }
+
+    private function quotedSqlStringValue(string $expression): string
+    {
+        $expression = trim($expression);
+        if (!preg_match('/^\'((?:\\\\.|\'\'|[^\'])*)\'(?:\s+AS\s+`?\w+`?)?$/i', $expression, $matches)) {
+            return '';
+        }
+        return str_replace("''", "'", stripslashes($matches[1]));
+    }
+
+    private function parseSqlInsertRows(string $valuesSql): array
+    {
+        $rows = [];
+        $length = strlen($valuesSql);
+        $inString = false;
+        $escape = false;
+        $depth = 0;
+        $value = '';
+        $row = [];
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $valuesSql[$i];
+
+            if ($inString) {
+                if ($escape) {
+                    $value .= $char;
+                    $escape = false;
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($char === "'") {
+                    if (($valuesSql[$i + 1] ?? '') === "'") {
+                        $value .= "'";
+                        $i++;
+                        continue;
+                    }
+                    $inString = false;
+                    continue;
+                }
+                $value .= $char;
+                continue;
+            }
+
+            if ($char === "'") {
+                $inString = true;
+                continue;
+            }
+            if ($char === '(') {
+                $depth++;
+                if ($depth === 1) {
+                    $row = [];
+                    $value = '';
+                    continue;
+                }
+            }
+            if ($char === ')' && $depth === 1) {
+                $row[] = $this->normalizeSqlValue($value);
+                $rows[] = $row;
+                $row = [];
+                $value = '';
+                $depth--;
+                continue;
+            }
+            if ($char === ')' && $depth > 1) {
+                $depth--;
+            }
+            if ($char === ',' && $depth === 1) {
+                $row[] = $this->normalizeSqlValue($value);
+                $value = '';
+                continue;
+            }
+            if ($depth >= 1) {
+                $value .= $char;
+            }
+        }
+
+        return $rows;
+    }
+
+    private function normalizeSqlValue(string $value): string
+    {
+        $value = trim($value);
+        return strcasecmp($value, 'NULL') === 0 ? '' : $value;
+    }
+
+    private function collectAdminRuleIdsByNames(array $ruleNames): array
+    {
+        $ids = Db::name('admin_rule')->whereIn('name', $ruleNames)->column('id');
+        $ids = array_map('intval', $ids);
+        if (!$ids) {
+            return [];
+        }
+
+        $allIds = $ids;
+        $pending = $ids;
+        while ($pending) {
+            $children = Db::name('admin_rule')->whereIn('pid', $pending)->column('id');
+            $children = array_values(array_diff(array_map('intval', $children), $allIds));
+            if (!$children) {
+                break;
+            }
+            $allIds = array_merge($allIds, $children);
+            $pending = $children;
+        }
+
+        return array_values(array_unique($allIds));
+    }
+
+    private function removeAdminRuleIdsFromGroups(array $ids): void
+    {
+        $removeIds = array_map('strval', $ids);
+        $groups = Db::name('admin_group')->where('rules', '<>', '*')->select()->toArray();
+        foreach ($groups as $group) {
+            $rules = array_filter(explode(',', (string)($group['rules'] ?? '')), function ($id) {
+                return $id !== '';
+            });
+            $newRules = array_values(array_diff($rules, $removeIds));
+            if ($newRules !== $rules) {
+                Db::name('admin_group')->where('id', $group['id'])->update(['rules' => implode(',', $newRules)]);
             }
         }
     }

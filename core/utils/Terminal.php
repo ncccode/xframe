@@ -249,7 +249,14 @@ class Terminal
             if ($this->procStatusMark === 2) {
                 $this->output('exitCode: ' . $this->procStatusData['exitcode']);
                 if ($this->procStatusData['exitcode'] === 0) {
-                    if ($this->successCallback()) {
+                    try {
+                        $callbackSuccess = $this->successCallback();
+                    } catch (Throwable $e) {
+                        $this->output('Error: Command execution succeeded, but callback execution failed: ' . $e->getMessage());
+                        $callbackSuccess = false;
+                    }
+
+                    if ($callbackSuccess) {
                         $this->outputFlag('exec-success');
                     } else {
                         $this->output('Error: Command execution succeeded, but callback execution failed');
@@ -360,17 +367,17 @@ class Terminal
                 return false;
             }
         } elseif ($commandPKey == 'web-install' && $this->extend) {
-            [$type, $value] = explode(':', $this->extend);
+            [$type, $value] = array_pad(explode(':', $this->extend, 2), 2, '');
             if ($type == 'module-install' && $value) {
                 Manage::instance($value)->dependentInstallComplete('npm');
             }
         } elseif ($commandPKey == 'composer' && $this->extend) {
-            [$type, $value] = explode(':', $this->extend);
+            [$type, $value] = array_pad(explode(':', $this->extend, 2), 2, '');
             if ($type == 'module-install' && $value) {
                 Manage::instance($value)->dependentInstallComplete('composer');
             }
         } elseif ($commandPKey == 'nuxt-install' && $this->extend) {
-            [$type, $value] = explode(':', $this->extend);
+            [$type, $value] = array_pad(explode(':', $this->extend, 2), 2, '');
             if ($type == 'module-install' && $value) {
                 Manage::instance($value)->dependentInstallComplete('nuxt_npm');
             }

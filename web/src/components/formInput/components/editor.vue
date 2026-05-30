@@ -3,12 +3,12 @@
 <!-- 向本组件传递 editorType（文件名/编辑器名称）自动加载对应的编辑器进行渲染 -->
 <template>
     <div>
-        <component v-bind="$attrs" :is="mixins[state.editorType]" />
+        <component v-bind="$attrs" :is="editorComponent" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { computed, reactive } from 'vue'
 import type { Component } from 'vue'
 
 interface Props {
@@ -34,6 +34,10 @@ for (const key in mixinComponents) {
         state.editorType = fileName
     }
 }
+
+const editorComponent = computed(() => {
+    return mixins[state.editorType] || mixins.default
+})
 </script>
 
 <style scoped lang="scss"></style>
