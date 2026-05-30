@@ -55,10 +55,11 @@ class ManifestWriter
         }
 
         $removedMenus = [];
+        $ruleTable = $this->ruleTable((string) ($manifest['app'] ?? $options->app));
         foreach (($manifest['menu_names'] ?? []) as $name) {
             $removedMenus[] = $name;
             if (!$dryRun) {
-                Db::name('admin_rule')->where('name', $name)->delete();
+                Db::name($ruleTable)->where('name', $name)->delete();
             }
         }
 
@@ -84,5 +85,10 @@ class ManifestWriter
             rmdir($dir);
             $dir = dirname($dir);
         }
+    }
+
+    protected function ruleTable(string $app): string
+    {
+        return $app === 'admin' ? 'admin_rule' : $app . '_rule';
     }
 }

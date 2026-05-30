@@ -4,12 +4,16 @@ interface RouteLangLocation {
     name?: string | symbol | null
 }
 
+interface RouteLangBackendApp {
+    name: string
+    baseRoutePath: string
+}
+
 interface ResolveRouteLangLoadPathsOptions {
     to: RouteLangLocation
     defaultLang: string
-    adminBaseRoutePath: string
+    backendApps?: RouteLangBackendApp[]
     langAutoLoadMap: Record<string, string[]>
-    isAdminApp: (path: string) => boolean
 }
 
 interface LoadRouteLangMessagesOptions extends ResolveRouteLangLoadPathsOptions {
@@ -18,32 +22,35 @@ interface LoadRouteLangMessagesOptions extends ResolveRouteLangLoadPathsOptions 
 }
 
 export function resolveRouteLangLoadPaths(options: ResolveRouteLangLoadPathsOptions) {
-    const { to, defaultLang, adminBaseRoutePath, langAutoLoadMap, isAdminApp } = options
+    const { to, defaultLang, langAutoLoadMap } = options
     const loadPath: string[] = []
-    const prefix = getLangPrefix(defaultLang)
+    const backendApp = getRouteBackendApp(options)
+    const appName = backendApp.name
+    const prefix = getLangPrefix(defaultLang, appName)
 
     if (to.path in langAutoLoadMap) {
         loadPath.push(...langAutoLoadMap[to.path as keyof typeof langAutoLoadMap])
     }
 
-    if (isAdminApp(to.fullPath)) {
-        const adminPath = to.path.slice(to.path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
-        if (adminPath) loadPath.push(prefix + adminPath + '.ts')
+    if (to.path === backendApp.baseRoutePath || to.path.startsWith(backendApp.baseRoutePath + '/')) {
+        const backendPath = to.path.slice(to.path.indexOf(backendApp.baseRoutePath) + backendApp.baseRoutePath.length)
+        if (backendPath) loadPath.push(prefix + backendPath + '.ts')
     }
 
     if (to.name) {
         loadPath.push(prefix + '/' + to.name.toString() + '.ts')
     }
 
-    loadPath.push(getPublicMessagePath(defaultLang))
+    loadPath.push(getPublicMessagePath(defaultLang, appName))
 
     return Array.from(new Set(loadPath.map((path) => path.replaceAll('${lang}', defaultLang))))
 }
 
 export async function loadRouteLangMessages(options: LoadRouteLangMessagesOptions) {
     const { defaultLang, loadLangHandle, mergeMessage } = options
-    const prefix = getLangPrefix(defaultLang)
-    const publicMessagePath = getPublicMessagePath(defaultLang)
+    const appName = getRouteBackendApp(options).name
+    const prefix = getLangPrefix(defaultLang, appName)
+    const publicMessagePath = getPublicMessagePath(defaultLang, appName)
     let loadPath = resolveRouteLangLoadPaths(options)
 
     if (!loadLangHandle.publicMessageLoaded) loadLangHandle.publicMessageLoaded = []
@@ -68,12 +75,23 @@ export async function loadRouteLangMessages(options: LoadRouteLangMessagesOption
     )
 }
 
-function getLangPrefix(defaultLang: string) {
-    return './admin/' + defaultLang
+function getLangPrefix(defaultLang: string, appName = 'admin') {
+    return './' + appName + '/' + defaultLang
 }
 
-function getPublicMessagePath(defaultLang: string) {
-    return getLangPrefix(defaultLang) + '.ts'
+function getPublicMessagePath(defaultLang: string, appName = 'admin') {
+    return getLangPrefix(defaultLang, appName) + '.ts'
+}
+
+function getRouteBackendApp(options: ResolveRouteLangLoadPathsOptions): RouteLangBackendApp {
+    const pathOnly = (options.to.fullPath || options.to.path || '').split(/[?#]/)[0]
+    const apps = options.backendApps ?? []
+    const app = apps
+        .filter((item) => pathOnly === item.baseRoutePath || pathOnly.startsWith(item.baseRoutePath + '/'))
+        .sort((a, b) => b.baseRoutePath.length - a.baseRoutePath.length)[0]
+    if (app) return app
+
+    return apps.find((item) => item.name === 'admin') ?? { name: 'admin', baseRoutePath: '/admin' }
 }
 
 function getLangPathName(path: string, prefix: string) {

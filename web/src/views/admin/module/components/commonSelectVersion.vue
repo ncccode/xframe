@@ -37,27 +37,30 @@
 </template>
 
 <script setup lang="ts">
-import { memoize } from 'lodash-es'
 import { useI18n } from 'vue-i18n'
 import { execInstall, showCommonLoading } from '../index'
 import { state } from '../store'
 
 const { t } = useI18n()
 
-const formatSysVersion = memoize((sysVersion: string) => {
-    // 去掉 sysVersion 开头的 v
-    sysVersion = sysVersion.replace(/^v/, '')
+const normalizeVersion = (version: string) => {
+    return (version.match(/\d+/g) || []).map((item) => {
+        return Number.parseInt(item, 10)
+    })
+}
 
-    // 以 . 分割，不足两位的补 0
-    sysVersion = sysVersion
-        .split('.')
-        .map((item) => {
-            return item.padStart(2, '0')
-        })
-        .join('')
+const compareVersionSegments = (currentVersion: number[], requiredVersion: number[]) => {
+    const maxLength = Math.max(currentVersion.length, requiredVersion.length)
 
-    return parseInt(sysVersion)
-})
+    for (let i = 0; i < maxLength; i++) {
+        const current = currentVersion[i] || 0
+        const required = requiredVersion[i] || 0
+        if (current > required) return 1
+        if (current < required) return -1
+    }
+
+    return 0
+}
 
 const isLocalModuleVersion = (version: string) => {
     const localModule = state.installedModule.find((item) => {
@@ -65,9 +68,7 @@ const isLocalModuleVersion = (version: string) => {
     })
 
     if (localModule) {
-        version = version.replace(/^v/, '')
-        localModule.version = localModule.version.replace(/^v/, '')
-        if (version == localModule.version) {
+        if (version.replace(/^v/i, '') == localModule.version.replace(/^v/i, '')) {
             return true
         }
     }
@@ -75,10 +76,18 @@ const isLocalModuleVersion = (version: string) => {
     return false
 }
 
-const compareVersion = memoize((version: string): boolean => {
-    const sysVersion = formatSysVersion(state.sysVersion)
-    return sysVersion > parseInt(version)
-})
+const compareVersion = (version: string): boolean => {
+    if (!version) return true
+
+    const operator = version.trim().match(/^(>=|<=|>|<|=)\s*/)?.[1] || '>='
+    const result = compareVersionSegments(normalizeVersion(state.sysVersion), normalizeVersion(version))
+
+    if (operator == '>') return result > 0
+    if (operator == '<') return result < 0
+    if (operator == '<=') return result <= 0
+    if (operator == '=') return result == 0
+    return result >= 0
+}
 
 const onInstall = (uid: string, id: number, version: string) => {
     state.dialog.common = true

@@ -9,8 +9,7 @@ use core\service\Token;
 use core\utils\Random;
 use core\utils\Tree;
 use app\admin\model\Admin as AdminModel;
-use app\admin\model\AdminGroup;
-use app\admin\model\AdminRule;
+use think\Model;
 
 /**
  * 后台权限类（管理员权限类）
@@ -61,9 +60,29 @@ class Auth
 
     /**
      * Model实例
-     * @var ?AdminModel
+     * @var ?Model
      */
-    protected ?AdminModel $model = null;
+    protected ?Model $model = null;
+
+    protected static string $instanceKey = 'adminAuth';
+
+    protected string $modelClass = AdminModel::class;
+
+    protected string $userTable = 'admin';
+
+    protected string $ruleTable = 'admin_rule';
+
+    protected string $groupTable = 'admin_group';
+
+    protected string $groupAccessTable = 'admin_group_access';
+
+    protected string $userGroupField = '';
+
+    protected string $tokenKeepConfig = 'xframe.admin_token_keep_time';
+
+    protected string $loginRetryConfig = 'xframe.admin_login_retry';
+
+    protected string $ssoConfig = 'xframe.admin_sso';
 
     /**
      * 令牌
@@ -102,7 +121,7 @@ class Auth
      */
     public function __construct(array $config = [])
     {
-        $this->setKeepTime((int) Config::get('xframe.admin_token_keep_time', 86400));
+        $this->setKeepTime($this->resolveTokenKeepTime());
     }
 
     /**
@@ -120,13 +139,14 @@ class Auth
      * @param array $options 预留配置项
      * @return Auth
      */
-    public static function instance(array $options = []): Auth
+    public static function instance(array $options = []): static
     {
         $request = request();
-        if (!isset($request->adminAuth)) {
-            $request->adminAuth = new static($options);
+        $key = static::$instanceKey;
+        if (!isset($request->{$key})) {
+            $request->{$key} = new static($options);
         }
-        return $request->adminAuth;
+        return $request->{$key};
     }
 
     /**
@@ -144,9 +164,10 @@ class Auth
              * 过期检查，过期则抛出 TokenExpirationException
              */
             $tokenService->tokenExpirationCheck($tokenData);
-            $adminId = intval($tokenData['user_id']);
-            if ($tokenData['type'] === self::TOKEN_TYPE && $adminId > 0) {
-                $this->model = AdminModel::where('id', $adminId)->find();
+            $userId = intval($tokenData['user_id']);
+            if ($tokenData['type'] === $this->getTokenType() && $userId > 0) {
+                $modelClass = $this->modelClass;
+                $this->model = $modelClass::where('id', $userId)->find();
                 if (!$this->model) {
                     $this->setError('Account not exist');
                     return false;
@@ -190,18 +211,19 @@ class Auth
             return false;
         }
 
-        $this->model = AdminModel::where($accountType, $username)->find();
+        $modelClass = $this->modelClass;
+        $this->model = $modelClass::where($accountType, $username)->find();
         if (!$this->model) {
             $this->setError('Account not exist');
             return false;
         }
-        if ((int) $this->model->status === 0) {
+        if ((int) $this->model->status !== 1) {
             $this->setError('Account disabled');
             return false;
         }
 
         // 登录失败重试检查
-        $adminLoginRetry = Config::get('xframe.admin_login_retry');
+        $adminLoginRetry = Config::get($this->loginRetryConfig, 10);
         if ($adminLoginRetry && $this->model->last_login_time) {
             // 重置失败次数
             if ($this->model->login_failure > 0 && time() - (int) $this->model->last_login_time >= 86400) {
@@ -209,7 +231,7 @@ class Auth
                 $this->model->save();
 
                 // 重获模型实例，避免单实例多次更新
-                $this->model = AdminModel::where($accountType, $username)->find();
+                $this->model = $modelClass::where($accountType, $username)->find();
             }
             if ($this->model->login_failure >= $adminLoginRetry) {
                 $this->setError('Please try again after 1 day');
@@ -226,9 +248,9 @@ class Auth
 
         // 清理 token
         $tokenService = new Token();
-        if (Config::get('xframe.admin_sso')) {
-            $tokenService->clear(self::TOKEN_TYPE, $this->model->id);
-            $tokenService->clear(self::TOKEN_TYPE . '-refresh', $this->model->id);
+        if (Config::get($this->ssoConfig, false)) {
+            $tokenService->clear($this->getTokenType(), $this->model->id);
+            $tokenService->clear($this->getTokenType() . '-refresh', $this->model->id);
         }
         if ($keep) {
             $this->setRefreshToken($this->refreshTokenKeepTime);
@@ -244,7 +266,8 @@ class Auth
      */
     public function direct(int $adminId): bool
     {
-        $this->model = AdminModel::find($adminId);
+        $modelClass = $this->modelClass;
+        $this->model = $modelClass::find($adminId);
         if (!$this->model) {
             return false;
         }
@@ -281,7 +304,7 @@ class Auth
 
             if (!$this->token) {
                 $this->token = Random::uuid();
-                (new Token())->set($this->token, self::TOKEN_TYPE, $this->model->id, $this->keepTime);
+                (new Token())->set($this->token, $this->getTokenType(), $this->model->id, $this->keepTime);
             }
             $this->model->commit();
         } catch (Throwable $e) {
@@ -340,9 +363,9 @@ class Auth
 
     /**
      * 获取管理员模型
-     * @return AdminModel
+     * @return ?Model
      */
-    public function getUser(): AdminModel
+    public function getUser(): ?Model
     {
         return $this->model;
     }
@@ -367,7 +390,7 @@ class Auth
             return;
         }
         $this->refreshToken = Random::uuid();
-        (new Token())->set($this->refreshToken, self::TOKEN_TYPE . '-refresh', $this->model->id, $keepTime);
+        (new Token())->set($this->refreshToken, $this->getTokenType() . '-refresh', $this->model->id, $keepTime);
     }
 
     /**
@@ -460,7 +483,7 @@ class Auth
     public function getRuleList(int $uid = 0): array
     {
         $ids = $this->getRuleIds($uid);
-        $query = AdminRule::where('status', 1);
+        $query = Db::name($this->ruleTable)->where('status', 1);
         if (!in_array('*', $ids, true)) {
             if (!$ids) {
                 return [];
@@ -481,11 +504,11 @@ class Auth
         if ($uid <= 0) {
             return [];
         }
-        $groupIds = Db::name('admin_group_access')->where('uid', $uid)->column('group_id');
+        $groupIds = $this->getUserGroupIds($uid);
         if (!$groupIds) {
             return [];
         }
-        $groups = AdminGroup::where('status', 1)->where('id', 'in', $groupIds)->select()->toArray();
+        $groups = Db::name($this->groupTable)->where('status', 1)->where('id', 'in', $groupIds)->select()->toArray();
         $ids = [];
         foreach ($groups as $group) {
             if (($group['rules'] ?? '') === '*') {
@@ -536,7 +559,13 @@ class Auth
         if (!$groupIds) {
             return [];
         }
-        return Db::name('admin_group_access')->where('group_id', 'in', $groupIds)->column('uid');
+        if ($this->groupAccessTable !== '') {
+            return Db::name($this->groupAccessTable)->where('group_id', 'in', $groupIds)->column('uid');
+        }
+        if ($this->userGroupField === '') {
+            return [];
+        }
+        return Db::name($this->userTable)->where($this->userGroupField, 'in', $groupIds)->column('id');
     }
 
     /**
@@ -547,11 +576,11 @@ class Auth
     public function getAdminChildGroups(int $uid = 0): array
     {
         $uid = $uid ?: (int) $this->id;
-        $groupIds = Db::name('admin_group_access')->where('uid', $uid)->column('group_id');
+        $groupIds = $this->getUserGroupIds($uid);
         if (!$groupIds) {
             return [];
         }
-        $groups = AdminGroup::where('status', 1)->select()->toArray();
+        $groups = Db::name($this->groupTable)->where('status', 1)->select()->toArray();
         $children = [];
         $parents = $groupIds;
         do {
@@ -576,14 +605,14 @@ class Auth
     public function getAllAuthGroups(string $method = 'allAuth', array $where = []): array
     {
         if ($this->isSuperAdmin()) {
-            return AdminGroup::where($where)->column('id');
+            return Db::name($this->groupTable)->where($where)->column('id');
         }
         $ownedRuleIds = $this->getRuleIds();
         if (!$ownedRuleIds || in_array('*', $ownedRuleIds, true)) {
             return [];
         }
 
-        $groups = AdminGroup::where($where)->where('status', 1)->select()->toArray();
+        $groups = Db::name($this->groupTable)->where($where)->where('status', 1)->select()->toArray();
         $ids = [];
         foreach ($groups as $group) {
             $rules = ($group['rules'] ?? '') === '*' ? ['*'] : array_filter(array_map('intval', explode(',', (string) ($group['rules'] ?? ''))));
@@ -635,7 +664,50 @@ class Auth
         $this->model = null;
         $this->refreshToken = '';
         $this->setError('');
-        $this->setKeepTime((int) Config::get('xframe.admin_token_keep_time', 86400));
+        $this->setKeepTime($this->resolveTokenKeepTime());
         return true;
+    }
+
+    public function getTokenType(): string
+    {
+        return static::TOKEN_TYPE;
+    }
+
+    protected function resolveTokenKeepTime(): int
+    {
+        $tokenType = $this->getTokenType();
+        $keys = [
+            $this->tokenKeepConfig,
+            $tokenType . '.' . $tokenType . '_token_keep_time',
+            $tokenType . '.token_keep_time',
+        ];
+
+        foreach (array_unique($keys) as $key) {
+            $value = Config::get($key, null);
+            if ($value !== null && $value !== '') {
+                return (int) $value;
+            }
+        }
+
+        return 86400;
+    }
+
+    protected function getUserGroupIds(int $uid): array
+    {
+        if ($this->groupAccessTable !== '') {
+            return Db::name($this->groupAccessTable)->where('uid', $uid)->column('group_id');
+        }
+
+        if ($this->userGroupField === '') {
+            return [];
+        }
+
+        $user = $uid === (int) $this->id && $this->model ? $this->model : Db::name($this->userTable)->where('id', $uid)->find();
+        if (!$user) {
+            return [];
+        }
+
+        $groupId = is_array($user) ? ($user[$this->userGroupField] ?? 0) : ($user->{$this->userGroupField} ?? 0);
+        return (int) $groupId > 0 ? [(int) $groupId] : [];
     }
 }

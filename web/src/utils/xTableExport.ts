@@ -9,6 +9,7 @@ interface ExportDownloadUrlInput {
     routePath: string
     taskId: string | number
     token: string
+    tokenHeader?: string
 }
 
 export function buildExportPayload(input: ExportPayloadInput) {
@@ -26,8 +27,8 @@ export function buildExportDownloadUrl(input: ExportDownloadUrlInput) {
         subId: '0',
         download: 'true',
         id: String(input.taskId),
-        xtoken: input.token,
-        server: '1',
     })
+    params.set(input.tokenHeader || 'xtoken', input.token)
+    params.set('server', '1')
     return `${base}${route}/export?${params.toString()}`
 }

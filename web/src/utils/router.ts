@@ -4,10 +4,56 @@ import type { RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import { i18n } from '/@/lang/index'
 import router from '/@/router/index'
-import adminBaseRoute from '/@/router/static/adminBase'
+import adminBaseRoute, { adminBaseRoutePath } from '/@/router/static/adminBase'
+import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
 import { useNavTabs } from '/@/stores/navTabs'
 import { closeShade } from '/@/utils/pageShade'
+
+export interface BackendAppConfig {
+    name: string
+    baseRoutePath: string
+    baseRouteName: string
+    loginRouteName: string
+    loginRoutePath: string
+    tokenHeader: string
+    refreshTokenType: string
+    viewsComponent: Record<string, any>
+    getAuthToken: () => string
+    getRefreshToken: () => string
+    setAuthToken: (token: string) => void
+    removeToken: () => void
+}
+
+interface StaticBackendRouteModule {
+    default?: RouteRecordRaw | RouteRecordRaw[]
+    backendApp?: BackendAppConfig
+    [key: string]: unknown
+}
+
+interface StaticBackendRouteApp {
+    name: string
+    baseRoutePath: string
+}
+
+const staticBackendRouteFiles: Record<string, StaticBackendRouteModule> = import.meta.glob('/src/router/static/*.ts', { eager: true })
+const baseRoutePathExportSuffix = 'BaseRoutePath'
+const adminViewsComponent = import.meta.glob('/src/views/admin/**/*.vue')
+
+export const adminBackendApp: BackendAppConfig = {
+    name: 'admin',
+    baseRoutePath: adminBaseRoutePath,
+    baseRouteName: adminBaseRoute.name as string,
+    loginRouteName: 'adminLogin',
+    loginRoutePath: adminBaseRoutePath + '/login',
+    tokenHeader: 'xtoken',
+    refreshTokenType: 'admin-refresh',
+    viewsComponent: adminViewsComponent,
+    getAuthToken: () => useAdminInfo().getToken(),
+    getRefreshToken: () => useAdminInfo().getToken('refresh'),
+    setAuthToken: (token: string) => useAdminInfo().setToken(token, 'auth'),
+    removeToken: () => useAdminInfo().removeToken(),
+}
 
 /**
  * 导航失败有错误消息的路由push
@@ -61,6 +107,111 @@ const getRoutePathWithoutQuery = (path: string) => {
     return path.split(/[?#]/)[0]
 }
 
+const normalizeBaseRoutePath = (path: string) => {
+    const trimPath = path.replace(/^\/+|\/+$/g, '')
+    return trimPath ? '/' + trimPath : ''
+}
+
+const getBackendAppNameByBaseRoutePathExport = (exportName: string) => {
+    const name = exportName.slice(0, -baseRoutePathExportSuffix.length)
+    return name.charAt(0).toLowerCase() + name.slice(1)
+}
+
+/**
+ * 扫描静态后台路由模块中的 xxxBaseRoutePath 入口路径
+ */
+export const getStaticBackendRouteApps = (): StaticBackendRouteApp[] => {
+    const apps: StaticBackendRouteApp[] = []
+    for (const key in staticBackendRouteFiles) {
+        const routeModule = staticBackendRouteFiles[key]
+        for (const exportName in routeModule) {
+            if (!exportName.endsWith(baseRoutePathExportSuffix) || typeof routeModule[exportName] !== 'string') continue
+
+            const name = getBackendAppNameByBaseRoutePathExport(exportName)
+            const baseRoutePath = routeModule[exportName]
+            if (!name || !baseRoutePath) continue
+
+            apps.push({
+                name,
+                baseRoutePath: normalizeBaseRoutePath(baseRoutePath),
+            })
+        }
+    }
+
+    return apps
+}
+
+export const getStaticBackendBaseRoutePath = (routeName: string, fallback = '') => {
+    return getStaticBackendRouteApps().find((item) => item.name === routeName)?.baseRoutePath ?? normalizeBaseRoutePath(fallback)
+}
+
+const getBackendBaseRoutePath = (backendApp: { name: string; baseRouteName: string; baseRoutePath: string }) => {
+    const routeApps = getStaticBackendRouteApps()
+    return (
+        routeApps.find((item) => item.name === backendApp.name || item.name === backendApp.baseRouteName)?.baseRoutePath ??
+        normalizeBaseRoutePath(backendApp.baseRoutePath)
+    )
+}
+
+const normalizeBackendLoginRoutePath = (loginRoutePath: string, oldBaseRoutePath: string, newBaseRoutePath: string) => {
+    const oldBasePath = normalizeBaseRoutePath(oldBaseRoutePath)
+    if (!oldBasePath || oldBasePath === newBaseRoutePath || !loginRoutePath.startsWith(oldBasePath + '/')) return loginRoutePath
+
+    return newBaseRoutePath + loginRoutePath.slice(oldBasePath.length)
+}
+
+const normalizeBackendApp = (backendApp: BackendAppConfig): BackendAppConfig => {
+    const baseRoutePath = getBackendBaseRoutePath(backendApp)
+    return {
+        ...backendApp,
+        baseRoutePath,
+        loginRoutePath: normalizeBackendLoginRoutePath(backendApp.loginRoutePath, backendApp.baseRoutePath, baseRoutePath),
+    }
+}
+
+export const backendApps: BackendAppConfig[] = [normalizeBackendApp(adminBackendApp)]
+
+for (const key in staticBackendRouteFiles) {
+    const app = staticBackendRouteFiles[key].backendApp
+    if (!app || !app.name || !app.baseRoutePath || backendApps.some((item) => item.name === app.name)) continue
+
+    backendApps.push(normalizeBackendApp(app))
+}
+
+export const getBackendAppByName = (name: string): BackendAppConfig | undefined => {
+    return backendApps.find((app) => app.name === name)
+}
+
+export const getBackendAppByPath = (path = ''): BackendAppConfig | undefined => {
+    const pathOnly = (path || '').split(/[?#]/)[0]
+    return backendApps
+        .filter((app) => pathOnly === app.baseRoutePath || pathOnly.startsWith(app.baseRoutePath + '/'))
+        .sort((a, b) => b.baseRoutePath.length - a.baseRoutePath.length)[0]
+}
+
+export const getBackendAppByRequestUrl = (url = '', currentPath = ''): BackendAppConfig | undefined => {
+    let path = url
+    try {
+        if (/^https?:\/\//i.test(url)) {
+            path = new URL(url).pathname
+        }
+    } catch {
+        path = url
+    }
+
+    const requestApp = getBackendAppByPath(path)
+    if (requestApp) return requestApp
+
+    return getBackendAppByPath(currentPath)
+}
+
+export const isBackendApp = (name: string, path = ''): boolean => {
+    const app = getBackendAppByPath(path)
+    return app?.name === name
+}
+
+export const getBackendPublicMessagePath = (lang: string, appName: string) => `./${appName}/${lang}.ts`
+
 /**
  * 打开侧边菜单
  * @param menu 菜单数据
@@ -95,14 +246,29 @@ export const onClickMenu = (menu: RouteRecordRaw) => {
  * 处理后台的路由
  */
 export const handleAdminRoute = (routes: any) => {
-    const viewsComponent = import.meta.glob('/src/views/admin/**/*.vue')
-    addRouteAll(viewsComponent, routes, adminBaseRoute.name as string)
-    const menuAdminBaseRoute = (adminBaseRoute.path as string) + '/'
+    handleBackendRoute(adminBackendApp.name, routes)
+}
+
+/**
+ * 处理后台应用路由
+ */
+export const handleBackendRoute = (appName: string, routes: any) => {
+    const backendApp = getBackendAppByName(appName) ?? adminBackendApp
+    const baseRoutePath = getBackendBaseRoutePath(backendApp)
+    addRouteAll(backendApp.viewsComponent, routes, backendApp.baseRouteName)
+    const menuBaseRoute = baseRoutePath + '/'
 
     // 更新stores中的路由菜单数据
     const navTabs = useNavTabs()
-    navTabs.setTabsViewRoutes(handleMenuRule(routes, menuAdminBaseRoute))
-    navTabs.fillAuthNode(handleAuthNode(routes, menuAdminBaseRoute))
+    navTabs.setTabsViewRoutes(handleMenuRule(routes, menuBaseRoute), baseRoutePath)
+    navTabs.fillAuthNode(handleAuthNode(routes, menuBaseRoute))
+}
+
+/**
+ * 处理用户后台的路由
+ */
+export const handleUserRoute = (routes: any) => {
+    handleBackendRoute('user', routes)
 }
 
 /**
@@ -232,7 +398,9 @@ export const addRouteItem = (viewsComponent: Record<string, any>, route: any, pa
     let path = '',
         component
     if (route.menu_type == 'iframe') {
-        path = adminBaseRoute.path + '/iframe/' + encodeURIComponent(route.url)
+        const backendApp = getBackendAppByPath(router.currentRoute.value.fullPath || router.currentRoute.value.path) ?? adminBackendApp
+        const baseRoutePath = getBackendBaseRoutePath(backendApp)
+        path = baseRoutePath + '/iframe/' + encodeURIComponent(route.url)
         component = () => import('/@/layouts/common/router-view/iframe.vue')
     } else {
         path = parentName ? getRoutePathWithoutQuery(route.path) : '/' + getRoutePathWithoutQuery(route.path)

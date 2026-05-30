@@ -9,8 +9,8 @@ import { i18n } from '../lang'
 import { useSiteConfig } from '../stores/siteConfig'
 import { getUrl } from './axios'
 import Icon from '/@/components/icon/index.vue'
+import { adminBackendApp, getBackendAppByPath, isBackendApp } from '/@/utils/router'
 import router from '/@/router/index'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useNavTabs } from '/@/stores/navTabs'
 
 export function registerIcons(app: App) {
@@ -156,14 +156,22 @@ export const buildJsonToElTreeData = (data: any): ElTreeData[] => {
  * @param path 不传递则通过当前路由 path 检查
  */
 export const isAdminApp = (path = '') => {
-    const regex = new RegExp(`^${adminBaseRoutePath}`)
-    if (path) {
-        return regex.test(path)
-    }
-    if (regex.test(getCurrentRoutePath())) {
-        return true
-    }
-    return false
+    return isBackendApp('admin', path || getCurrentRoutePath())
+}
+
+/**
+ * 是否在用户后台应用内
+ * @param path 不传递则通过当前路由 path 检查
+ */
+export const isUserApp = (path = '') => {
+    return isBackendApp('user', path || getCurrentRoutePath())
+}
+
+/**
+ * 获取当前路径所属后台应用配置
+ */
+export const getCurrentBackendApp = (path = '') => {
+    return getBackendAppByPath(path || getCurrentRoutePath()) ?? adminBackendApp
 }
 
 /**
@@ -255,7 +263,8 @@ const getCurrentAuthNodePaths = () => {
     const routeName = router.currentRoute.value.name
 
     if (typeof routeName === 'string' && routeName) {
-        const namePath = `${adminBaseRoutePath}/${trim(routeName, '/')}`
+        const backendApp = getCurrentBackendApp()
+        const namePath = `${backendApp.baseRoutePath}/${trim(routeName, '/')}`
 
         if (!paths.includes(namePath)) {
             paths.push(namePath)
@@ -275,8 +284,9 @@ const getCurrentAuthNodePaths = () => {
 export const __ = (key: string, named?: Record<string, unknown>, options?: TranslateOptions<string>) => {
     let langPath = ''
     const path = getCurrentRoutePath()
-    if (isAdminApp()) {
-        langPath = path.slice(path.indexOf(adminBaseRoutePath) + adminBaseRoutePath.length)
+    const backendApp = getCurrentBackendApp(path)
+    if (path === backendApp.baseRoutePath || path.startsWith(backendApp.baseRoutePath + '/')) {
+        langPath = path.slice(path.indexOf(backendApp.baseRoutePath) + backendApp.baseRoutePath.length)
         langPath = trim(langPath, '/').replaceAll('/', '.')
     }
     langPath = langPath ? langPath + '.' + key : key

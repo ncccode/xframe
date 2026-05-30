@@ -215,6 +215,88 @@ class Server
     }
 
     /**
+     * 检查 XFrame 模块依赖。
+     *
+     * config.json:
+     * {
+     *     "xframeModules": {
+     *         "user": ">=1.0.0"
+     *     }
+     * }
+     *
+     * @throws Throwable
+     */
+    public static function moduleDependencyCheck(string $dir, string $installDir): void
+    {
+        $depends = self::getConfig($dir, 'xframeModules');
+        if (!$depends) {
+            return;
+        }
+
+        $installed = [];
+        foreach (self::installedList($installDir) as $module) {
+            if (!isset($module['uid'])) {
+                continue;
+            }
+            $installed[(string)$module['uid']] = $module;
+        }
+
+        foreach ($depends as $uid => $constraint) {
+            $uid = (string)$uid;
+            $constraint = trim((string)$constraint);
+            $module = $installed[$uid] ?? null;
+            if (!$module || (int)($module['state'] ?? 0) !== Manage::INSTALLED) {
+                throw new Exception('Module dependency missing', 0, [
+                    'uid'        => $uid,
+                    'constraint' => $constraint,
+                ]);
+            }
+
+            $version = (string)($module['version'] ?? '');
+            if (!self::moduleVersionSatisfies($version, $constraint)) {
+                throw new Exception('Module dependency version mismatch', 0, [
+                    'uid'              => $uid,
+                    'constraint'       => $constraint,
+                    'installedVersion' => $version,
+                ]);
+            }
+        }
+    }
+
+    private static function moduleVersionSatisfies(string $version, string $constraint): bool
+    {
+        if ($constraint === '' || $constraint === '*') {
+            return true;
+        }
+
+        $constraints = array_filter(array_map('trim', explode(',', $constraint)));
+        foreach ($constraints as $item) {
+            if (!preg_match('/^(>=|<=|>|<|=)?\s*v?(.+)$/i', $item, $matches)) {
+                return false;
+            }
+
+            $operator = $matches[1] ?: '=';
+            $required = ltrim((string)$matches[2], 'vV');
+            $installed = ltrim($version, 'vV');
+
+            $compare = version_compare($installed, $required);
+            $passed = match ($operator) {
+                '>'  => $compare > 0,
+                '>=' => $compare >= 0,
+                '<'  => $compare < 0,
+                '<=' => $compare <= 0,
+                default => $compare === 0,
+            };
+
+            if (!$passed) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * 依赖冲突检查
      * @throws Throwable
      */

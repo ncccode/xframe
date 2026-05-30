@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { reactive } from 'vue'
 import type { RouteLocationNormalized, RouteRecordRaw } from 'vue-router'
 import { i18n } from '../lang'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
+import { adminBackendApp } from '/@/utils/router'
 import { STORE_TAB_VIEW_CONFIG } from '/@/stores/constant/cacheKey'
 import type { NavTabs } from '/@/stores/interface/index'
 import { layoutNavTabsRef } from '/@/stores/refs'
@@ -131,8 +131,8 @@ export const useNavTabs = defineStore(
         /**
          * 设置从后台加载到的菜单路由列表
          */
-        const setTabsViewRoutes = (data: RouteRecordRaw[]): void => {
-            state.tabsViewRoutes = encodeRoutesURI(data)
+        const setTabsViewRoutes = (data: RouteRecordRaw[], baseRoutePath = ''): void => {
+            state.tabsViewRoutes = encodeRoutesURI(data, baseRoutePath || inferBaseRoutePath(data))
         }
 
         /**
@@ -247,15 +247,34 @@ export const useNavTabs = defineStore(
 /**
  * 对iframe的url进行编码
  */
-function encodeRoutesURI(data: RouteRecordRaw[]) {
+function encodeRoutesURI(data: RouteRecordRaw[], baseRoutePath = adminBackendApp.baseRoutePath) {
     data.forEach((item) => {
         if (item.meta?.menu_type == 'iframe') {
-            item.path = adminBaseRoutePath + '/iframe/' + encodeURIComponent(item.path)
+            const iframePrefix = baseRoutePath + '/iframe/'
+            if (!item.path.startsWith(iframePrefix)) {
+                item.path = iframePrefix + encodeURIComponent(item.path)
+            }
         }
 
         if (item.children && item.children.length) {
-            item.children = encodeRoutesURI(item.children)
+            item.children = encodeRoutesURI(item.children, baseRoutePath)
         }
     })
     return data
+}
+
+function inferBaseRoutePath(data: RouteRecordRaw[]): string {
+    for (const item of data) {
+        const match = typeof item.path === 'string' ? item.path.match(/^\/([^/?#]+)/) : null
+        if (match) {
+            return '/' + match[1]
+        }
+
+        if (item.children && item.children.length) {
+            const childBaseRoutePath = inferBaseRoutePath(item.children)
+            if (childBaseRoutePath) return childBaseRoutePath
+        }
+    }
+
+    return adminBackendApp.baseRoutePath
 }

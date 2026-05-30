@@ -16,12 +16,52 @@ use support\Request;
 use support\exception\PageNotFoundException;
 use support\think\Db;
 use Webman\App;
+use Webman\Config;
 use Webman\Route;
 
+$getBackendApps = static function (): array {
+    $apps = Config::get('xframe.backend_apps', []);
+    if (!is_array($apps)) {
+        return [];
+    }
 
-$normalizeAdminEntrance = static function (string $entrance): string {
+    $reservedPaths = ['admin', 'api', 'app', 'assets', 'static'];
+    $normalized = [];
+    foreach ($apps as $name => $appConfig) {
+        $name = trim((string) $name);
+        if ($name === '' || !is_array($appConfig)) {
+            continue;
+        }
+
+        $path = '/' . trim((string) ($appConfig['path'] ?? $name), '/');
+        if (
+            !preg_match('#^/[A-Za-z0-9][A-Za-z0-9_-]*$#', $path)
+            || in_array(strtolower(trim($path, '/')), $reservedPaths, true)
+        ) {
+            continue;
+        }
+
+        $app = trim((string) ($appConfig['app'] ?? $name), '\\/');
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $app)) {
+            continue;
+        }
+
+        $normalized[$name] = [
+            'name' => $name,
+            'path' => $path,
+            'app'  => $app,
+        ];
+    }
+
+    return $normalized;
+};
+
+$normalizeAdminEntrance = static function (string $entrance) use ($getBackendApps): string {
     $entrance = trim($entrance ?: '/admin', '/');
     $reserved = ['api', 'app', 'assets', 'static'];
+    foreach ($getBackendApps() as $backendApp) {
+        $reserved[] = strtolower(trim((string) $backendApp['path'], '/'));
+    }
     if (
         !preg_match('/^[A-Za-z0-9]+$/', $entrance)
         || in_array(strtolower($entrance), $reserved, true)
@@ -79,6 +119,22 @@ $handleAdminEntrance = static function (Request $request, string $path = '') use
 
     return response()->file(base_path('public/index.html'));
 };
+
+$handleBackendEntrance = static function (Request $request, array $backendApp, string $path = '') use ($dispatchDefaultController, $isAdminApiRequest) {
+    if ($isAdminApiRequest($request)) {
+        $path = trim($path, '/');
+        $app = trim((string)($backendApp['app'] ?? $backendApp['name'] ?? ''), '/');
+        return $dispatchDefaultController($request, '/' . $app . ($path === '' ? '' : '/' . $path));
+    }
+
+    return response()->file(base_path('public/index.html'));
+};
+
+foreach ($getBackendApps() as $backendApp) {
+    Route::any($backendApp['path'] . '[/{path:.+}]', function (Request $request, string $path = '') use ($handleBackendEntrance, $backendApp) {
+        return $handleBackendEntrance($request, $backendApp, $path);
+    });
+}
 
 Route::any('/admin[/{path:.+}]', function (Request $request, string $path = '') use ($getAdminEntrance, $handleAdminEntrance) {
     if ($getAdminEntrance() !== 'admin') {

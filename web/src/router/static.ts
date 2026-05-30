@@ -63,9 +63,14 @@ const staticRoutes: Array<RouteRecordRaw> = [
     },
 ]
 
-const staticFiles: Record<string, Record<string, RouteRecordRaw>> = import.meta.glob('./static/*.ts', { eager: true })
+const staticFiles: Record<string, Record<string, RouteRecordRaw | RouteRecordRaw[]>> = import.meta.glob('./static/*.ts', { eager: true })
 for (const key in staticFiles) {
-    if (staticFiles[key].default) staticRoutes.push(staticFiles[key].default)
+    const route = staticFiles[key].default
+    if (Array.isArray(route)) {
+        staticRoutes.push(...route)
+    } else if (route) {
+        staticRoutes.push(route)
+    }
 }
 
 export default staticRoutes

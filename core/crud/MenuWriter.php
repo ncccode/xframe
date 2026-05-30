@@ -46,6 +46,7 @@ class MenuWriter
         $menuName = $names['menuName'];
         $now = date('Y-m-d H:i:s');
         $parentId = $this->resolveParentId($descriptor['app'], $descriptor['parent'], $descriptor['path']);
+        $ruleTable = $this->ruleTable($descriptor['app']);
 
         $db = Db::connect();
         $db->startTrans();
@@ -64,10 +65,10 @@ class MenuWriter
                 'extend' => 'none',
                 'remark' => '',
                 'sort' => 0,
-                'status' => 'enable',
+                'status' => 1,
                 'create_time' => $now,
                 'update_time' => $now,
-            ]);
+            ], $ruleTable);
 
             $namesWritten = [$menuName];
             foreach ($this->buttons as $action => $title) {
@@ -86,19 +87,19 @@ class MenuWriter
                     'extend' => 'none',
                     'remark' => '',
                     'sort' => 0,
-                    'status' => 'enable',
+                    'status' => 1,
                     'create_time' => $now,
                     'update_time' => $now,
-                ]);
+                ], $ruleTable);
                 $namesWritten[] = $buttonName;
             }
 
             if ($parentId > 0) {
-                $this->autoAssignPermission($menuId, $parentId);
+                $this->autoAssignPermission($descriptor['app'], $menuId, $parentId);
             }
-            $children = Db::name('admin_rule')->where('pid', $menuId)->select()->toArray();
+            $children = Db::name($ruleTable)->where('pid', $menuId)->select()->toArray();
             foreach ($children as $child) {
-                $this->autoAssignPermission((int) $child['id'], $menuId);
+                $this->autoAssignPermission($descriptor['app'], (int) $child['id'], $menuId);
             }
 
             $db->commit();
@@ -111,14 +112,11 @@ class MenuWriter
 
     protected function resolveParentId(string $app, string $parent, string $path): int
     {
+        $ruleTable = $this->ruleTable($app);
         if ($parent !== '') {
-            $names = [$parent];
-            if ($app !== 'admin' && !str_starts_with($parent, $app . '/')) {
-                array_unshift($names, $app . '/' . $parent);
-            }
-            $id = Db::name('admin_rule')->whereIn('name', $names)->value('id');
+            $id = Db::name($ruleTable)->where('name', $parent)->value('id');
             if (!$id) {
-                throw new CrudException("Parent menu [$parent] was not found in admin_rule.");
+                throw new CrudException("Parent menu [$parent] was not found in [$ruleTable].");
             }
             return (int) $id;
         }
@@ -126,12 +124,11 @@ class MenuWriter
         $segments = explode('/', $path);
         array_pop($segments);
         $pid = 0;
-        $prefix = $app === 'admin' ? '' : $app . '/';
         $current = [];
         foreach ($segments as $segment) {
             $current[] = $segment;
-            $name = $prefix . implode('/', $current);
-            $row = Db::name('admin_rule')->where('name', $name)->find();
+            $name = implode('/', $current);
+            $row = Db::name($ruleTable)->where('name', $name)->find();
             if ($row) {
                 $pid = (int) $row['id'];
                 continue;
@@ -150,38 +147,65 @@ class MenuWriter
                 'extend' => 'none',
                 'remark' => '',
                 'sort' => 0,
-                'status' => 'enable',
+                'status' => 1,
                 'create_time' => date('Y-m-d H:i:s'),
                 'update_time' => date('Y-m-d H:i:s'),
-            ]);
+            ], $ruleTable);
         }
 
         return $pid;
     }
 
-    protected function upsertRule(array $data): int
+    protected function upsertRule(array $data, string $ruleTable): int
     {
-        $row = Db::name('admin_rule')->where('name', $data['name'])->find();
+        $row = Db::name($ruleTable)->where('name', $data['name'])->find();
         if ($row) {
             $update = $data;
             unset($update['id'], $update['create_time']);
             $update['update_time'] = date('Y-m-d H:i:s');
-            Db::name('admin_rule')->where('id', $row['id'])->update($update);
+            Db::name($ruleTable)->where('id', $row['id'])->update($update);
             return (int) $row['id'];
         }
 
-        return (int) Db::name('admin_rule')->insertGetId($data);
+        return (int) Db::name($ruleTable)->insertGetId($data);
     }
 
-    protected function autoAssignPermission(int $id, int $pid): void
+    protected function autoAssignPermission(string $app, int $id, int $pid): void
     {
-        $groups = Db::name('admin_group')->where('rules', '<>', '*')->select()->toArray();
+        $groupTable = $this->groupTable($app);
+        if (!$this->tableExists($groupTable)) {
+            return;
+        }
+        try {
+            $groups = Db::name($groupTable)->where('rules', '<>', '*')->select()->toArray();
+        } catch (Throwable) {
+            return;
+        }
         foreach ($groups as $group) {
             $rules = array_filter(explode(',', (string) $group['rules']));
             if (in_array((string) $pid, $rules, true) && !in_array((string) $id, $rules, true)) {
                 $rules[] = (string) $id;
-                Db::name('admin_group')->where('id', $group['id'])->update(['rules' => implode(',', $rules)]);
+                Db::name($groupTable)->where('id', $group['id'])->update(['rules' => implode(',', $rules)]);
             }
+        }
+    }
+
+    protected function ruleTable(string $app): string
+    {
+        return $app === 'admin' ? 'admin_rule' : $app . '_rule';
+    }
+
+    protected function groupTable(string $app): string
+    {
+        return $app === 'admin' ? 'admin_group' : $app . '_group';
+    }
+
+    protected function tableExists(string $table): bool
+    {
+        try {
+            return Db::name($table)->limit(1)->fetchSql(false)->count() >= 0;
+        } catch (Throwable) {
+            return false;
         }
     }
 }

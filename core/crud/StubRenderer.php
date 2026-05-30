@@ -53,17 +53,19 @@ class StubRenderer
             'zhLangFile' => 'web/src/lang/' . $app . '/zh-cn/' . $path . '.ts',
             'enLangFile' => 'web/src/lang/' . $app . '/en/' . $path . '.ts',
             'controllerRoute' => $routeDir . $class,
+            'backendControllerClass' => $this->studly($app),
         ];
     }
 
     public function menuName(string $app, string $path): string
     {
-        return $app === 'admin' ? $path : $app . '/' . $path;
+        return $path;
     }
 
     protected function controller(array $descriptor, array $names): string
     {
         $class = $names['class'];
+        $backendControllerClass = $names['backendControllerClass'];
         $quickSearch = $this->phpArray($descriptor['quickSearch']);
         $preExclude = array_values(array_filter(['create_time', 'update_time'], static fn($field) => isset($descriptor['fields'][$field])));
         $preExcludeCode = $preExclude ? "\n    protected string|array \$preExcludeFields = " . $this->phpArray($preExclude) . ";\n" : '';
@@ -81,12 +83,12 @@ class StubRenderer
 namespace {$names['controllerNamespace']};
 
 use {$names['modelNamespace']}\\{$class} as {$class}Model;
-use app\\common\\controller\\Admin as AdminController;
+use app\\common\\controller\\{$backendControllerClass} as ParentController;
 
 /**
  * {$descriptor['title']}
  */
-class {$class} extends AdminController
+class {$class} extends ParentController
 {
     /**
      * @var object

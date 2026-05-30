@@ -88,20 +88,124 @@ class Common extends BaseController
         $type = (string)($refreshTokenData['type'] ?? '');
         $userId = (int)($refreshTokenData['user_id'] ?? 0);
 
-        if ($type !== AdminAuth::TOKEN_TYPE . '-refresh' || $userId <= 0) {
+        $authClass = $this->getAuthClassByRefreshTokenType($type);
+        if ($userId <= 0 || !$authClass) {
             return $this->error(__('Login expired, please login again.'));
         }
 
+        $tokenType = $authClass::TOKEN_TYPE;
+        $keepTime = $this->getTokenKeepTime($authClass, $tokenType);
+
         $tokenService->set(
             $newToken,
-            AdminAuth::TOKEN_TYPE,
+            $tokenType,
             $userId,
-            (int)Config::get('xframe.admin_token_keep_time', 86400)
+            $keepTime
         );
 
         return $this->success('', [
             'type'  => $type,
             'token' => $newToken,
         ]);
+    }
+
+    /**
+     * @return class-string<AdminAuth>|null
+     */
+    private function getAuthClassByRefreshTokenType(string $refreshTokenType): ?string
+    {
+        foreach ($this->backendAuthClasses() as $class) {
+            if ($refreshTokenType === $class::TOKEN_TYPE . '-refresh') {
+                return $class;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param class-string<AdminAuth> $authClass
+     */
+    private function getTokenKeepTime(string $authClass, string $tokenType): int
+    {
+        $keys = [];
+        foreach ($this->backendApps() as $backendApp) {
+            $app = trim((string)($backendApp['app'] ?? $backendApp['name'] ?? ''), '\\/');
+            if ($app === '' || $authClass !== 'app\\' . $app . '\\library\\Auth') {
+                continue;
+            }
+
+            $keys[] = $app . '.' . $tokenType . '_token_keep_time';
+            $keys[] = $app . '.token_keep_time';
+            break;
+        }
+
+        $keys[] = 'xframe.' . $tokenType . '_token_keep_time';
+        foreach (array_unique($keys) as $key) {
+            $value = Config::get($key, null);
+            if ($value !== null && $value !== '') {
+                return (int)$value;
+            }
+        }
+
+        return 86400;
+    }
+
+    /**
+     * @return array<class-string<AdminAuth>>
+     */
+    private function backendAuthClasses(): array
+    {
+        $classes = [AdminAuth::class];
+        foreach ($this->backendApps() as $backendApp) {
+            $app = trim((string)($backendApp['app'] ?? $backendApp['name'] ?? ''), '\\/');
+            if ($app === '') {
+                continue;
+            }
+            $class = 'app\\' . $app . '\\library\\Auth';
+            if (class_exists($class) && is_a($class, AdminAuth::class, true)) {
+                $classes[] = $class;
+            }
+        }
+
+        return array_values(array_unique($classes));
+    }
+
+    private function backendApps(): array
+    {
+        $apps = Config::get('xframe.backend_apps', []);
+        if (!is_array($apps)) {
+            return [];
+        }
+
+        $normalized = [];
+        $reservedPaths = ['admin', 'api', 'app', 'assets', 'static'];
+        foreach ($apps as $name => $appConfig) {
+            $name = trim((string)$name);
+            if ($name === '' || !is_array($appConfig)) {
+                continue;
+            }
+
+            $path = '/' . trim((string)($appConfig['path'] ?? $name), '/');
+            if (
+                !preg_match('#^/[A-Za-z0-9][A-Za-z0-9_-]*$#', $path)
+                || in_array(strtolower(trim($path, '/')), $reservedPaths, true)
+            ) {
+                continue;
+            }
+
+            $app = trim((string)($appConfig['app'] ?? $name), '\\/');
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $app)) {
+                continue;
+            }
+
+            $normalized[$name] = [
+                'name' => $name,
+                'path' => $path,
+                'app'  => $app,
+            ];
+        }
+
+        return $normalized;
     }
 }

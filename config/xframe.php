@@ -4,26 +4,18 @@
 // +----------------------------------------------------------------------
 
 return [
+    // 后台应用入口配置，安装后台模块时会自动写入
+    'backend_apps'          => [],
     // 允许跨域访问的域名
     'cors_request_domain'   => 'localhost,127.0.0.1',
-    // 是否开启会员登录验证码
-    'user_login_captcha'    => true,
     // 是否开启管理员登录验证码
     'admin_login_captcha'   => false,
-    // 会员登录失败可重试次数,false则无限
-    'user_login_retry'      => 10,
     // 管理员登录失败可重试次数,false则无限
     'admin_login_retry'     => 10,
     // 开启管理员单处登录它处失效
     'admin_sso'             => false,
-    // 开启会员单处登录它处失效
-    'user_sso'              => false,
-    // 会员登录态保持时间（非刷新token，3天）
-    'user_token_keep_time'  => 60 * 60 * 24 * 3,
     // 管理员登录态保持时间（非刷新token，3天）
     'admin_token_keep_time' => 60 * 60 * 24 * 3,
-    // 开启前台会员中心
-    'open_member_center'    => true,
     // 模块纯净安装（安装时移动模块文件而不是复制）
     'module_pure_install'   => true,
     // 点选验证码配置

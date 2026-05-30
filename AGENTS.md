@@ -275,6 +275,10 @@ TypeScript/Vue：
 - 真实接口验收时用后台入口路径，并带 `server: true`。
 - 守护进程模式下修改 `.env` 后必须 restart。
 
+Git：
+
+- 后续提交 `git commit` 信息默认使用中文，除非用户明确要求其他语言。
+
 ## 不要误删或误改
 
 - `vendor/`、`web/node_modules/`：依赖目录。

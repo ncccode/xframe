@@ -151,7 +151,7 @@ export interface UserInfo {
     mobile: string
     gender: number
     birthday: string
-    money: number
+    money: number | string
     score: number
     avatar: string
     last_login_time: string

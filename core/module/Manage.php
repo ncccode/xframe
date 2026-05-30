@@ -327,7 +327,8 @@ class Manage
             throw new Exception('Please login first', 303);
         }
 
-        $state = $this->getInstallState();
+        $state     = $this->getInstallState();
+        $versionId = request()->param("versionId/d");
 
         if ($update) {
             if (!in_array($state, [self::UNINSTALLED, self::WAIT_INSTALL, self::DISABLE])) {
@@ -352,24 +353,39 @@ class Manage
         }
 
         // 模块信息
+        $state   = $this->getInstallState();
         $info    = $this->getInfo();
         $runtime = Server::getRuntime($this->modulesDir);
 
-        // 安装预检 - 系统版本号要求、已安装模块的互斥和依赖检测等
+        // 模块包已经位于本地待安装状态时，下载/上传阶段已经完成来源校验。
+        // 后续使用本地依赖、冲突和 SQL 检查，避免重复市场预检把已下载的包判为“不可用”。
+        if ($state != self::WAIT_INSTALL) {
+            // 安装预检 - 系统版本号要求、已安装模块的互斥和依赖检测等
+            try {
+                Server::installPreCheck([
+                    'uid'           => $info['uid'],
+                    'version'       => $info['version'],
+                    'versionId'     => $versionId,
+                    'sysVersion'    => Config::get('xframe.version'),
+                    'nuxtVersion'   => Server::getNuxtVersion(),
+                    'moduleVersion' => $info['version'],
+                    'x-user-token' => $token,
+                    'installed'     => Server::getInstalledIds($this->installDir),
+                    'md5'           => $runtime['moduleMD5'] ?? '',
+                    'comment'       => $runtime['moduleComment'] ?? '',
+                    'server'        => 1,
+                ]);
+            } catch (Throwable $e) {
+                if (!$update) {
+                    Filesystem::delDir($this->modulesDir);
+                }
+                throw $e;
+            }
+        }
+
+        // 本地 XFrame 模块依赖预检，必须在导入 SQL 前完成。
         try {
-            Server::installPreCheck([
-                'uid'           => $info['uid'],
-                'version'       => $info['version'],
-                'versionId'     => request()->param("versionId/d"),
-                'sysVersion'    => Config::get('xframe.version'),
-                'nuxtVersion'   => Server::getNuxtVersion(),
-                'moduleVersion' => $info['version'],
-                'x-user-token' => $token,
-                'installed'     => Server::getInstalledIds($this->installDir),
-                'md5'           => $runtime['moduleMD5'] ?? '',
-                'comment'       => $runtime['moduleComment'] ?? '',
-                'server'        => 1,
-            ]);
+            Server::moduleDependencyCheck($this->modulesDir, $this->installDir);
         } catch (Throwable $e) {
             if (!$update) {
                 Filesystem::delDir($this->modulesDir);
@@ -399,6 +415,7 @@ class Manage
 
         $latestInfo = $this->getInfo();
         if (($latestInfo['state'] ?? null) == self::INSTALLED) {
+            $this->installBackendAppsConfig();
             Server::installRecord($this->uid, (string)($latestInfo['version'] ?? $info['version']), 'installed', '', $token);
             unset($latestInfo['install_token']);
             $this->setInfo([], $latestInfo);
@@ -422,6 +439,8 @@ class Manage
 
         // 执行卸载脚本
         Server::execEvent($this->uid, 'uninstall');
+
+        $this->removeBackendAppsConfig();
 
         Filesystem::delDir($this->modulesDir);
     }
@@ -683,6 +702,8 @@ class Manage
         $this->setInfo([
             'state' => self::DISABLE,
         ]);
+
+        $this->removeBackendAppsConfig();
 
         if ($update) {
             throw new Exception('update', -3, [
@@ -946,6 +967,7 @@ class Manage
     {
         $info = $this->getInfo();
         if ($info['state'] == self::DEPENDENT_WAIT_INSTALL) {
+            $backendAppsInstalled = false;
             if ($type == 'npm') {
                 unset($info['npm_dependent_wait_install']);
             }
@@ -963,8 +985,12 @@ class Manage
                 $token = (string)($info['install_token'] ?? '');
                 unset($info['install_token']);
                 Server::installRecord($this->uid, (string)($info['version'] ?? ''), 'installed', '', $token);
+                $backendAppsInstalled = true;
             }
             $this->setInfo([], $info);
+            if ($backendAppsInstalled) {
+                $this->installBackendAppsConfig();
+            }
         }
     }
 
@@ -1010,6 +1036,228 @@ class Manage
             }
         }
         return $depend;
+    }
+
+    /**
+     * 将模块声明的后台应用写入宿主 config/xframe.php。
+     *
+     * @throws Throwable
+     */
+    private function installBackendAppsConfig(): void
+    {
+        $moduleApps = $this->getModuleBackendApps();
+        if (!$moduleApps) {
+            return;
+        }
+
+        $apps = $this->getXframeBackendAppsFromFile();
+        foreach ($moduleApps as $name => $appConfig) {
+            $apps[$name] = array_merge($apps[$name] ?? [], $appConfig);
+        }
+
+        $this->writeXframeBackendAppsConfig(self::normalizeBackendApps($apps));
+    }
+
+    /**
+     * 从宿主 config/xframe.php 移除模块声明的后台应用。
+     *
+     * @throws Throwable
+     */
+    private function removeBackendAppsConfig(): void
+    {
+        $moduleApps = $this->getModuleBackendApps();
+        if (!$moduleApps) {
+            return;
+        }
+
+        $apps = $this->getXframeBackendAppsFromFile();
+        foreach (array_keys($moduleApps) as $name) {
+            unset($apps[$name]);
+        }
+
+        $this->writeXframeBackendAppsConfig(self::normalizeBackendApps($apps));
+    }
+
+    private function getModuleBackendApps(): array
+    {
+        return self::normalizeBackendApps(Server::getConfig($this->modulesDir, 'xframeBackendApps'));
+    }
+
+    private function getXframeBackendAppsFromFile(): array
+    {
+        $configFile = base_path('config/xframe.php');
+        $config = is_file($configFile) ? include $configFile : [];
+        if (!is_array($config)) {
+            return [];
+        }
+
+        $apps = $config['backend_apps'] ?? [];
+        return is_array($apps) ? self::normalizeBackendApps($apps) : [];
+    }
+
+    private static function normalizeBackendApps(array $apps): array
+    {
+        $normalized = [];
+        $reservedPaths = ['admin', 'api', 'app', 'assets', 'static'];
+        foreach ($apps as $name => $appConfig) {
+            $name = trim((string)$name);
+            if ($name === '' || !is_array($appConfig)) {
+                continue;
+            }
+
+            $path = '/' . trim((string)($appConfig['path'] ?? $name), '/');
+            if (
+                !preg_match('#^/[A-Za-z0-9][A-Za-z0-9_-]*$#', $path)
+                || in_array(strtolower(trim($path, '/')), $reservedPaths, true)
+            ) {
+                continue;
+            }
+
+            $app = trim((string)($appConfig['app'] ?? $name), '\\/');
+            if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $app)) {
+                continue;
+            }
+
+            $normalized[$name] = [
+                'path' => $path,
+                'app'  => $app,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @throws Throwable
+     */
+    private function writeXframeBackendAppsConfig(array $apps): void
+    {
+        $configFile = base_path('config/xframe.php');
+        $content = @file_get_contents($configFile);
+        if ($content === false) {
+            throw new Exception('Configuration file has no write permission');
+        }
+
+        $content = self::replaceBackendAppsConfigBlock($content, self::buildBackendAppsConfigBlock($apps));
+        if (@file_put_contents($configFile, $content, LOCK_EX) === false) {
+            throw new Exception('Configuration file has no write permission');
+        }
+    }
+
+    /**
+     * @throws Throwable
+     */
+    private static function replaceBackendAppsConfigBlock(string $content, string $block): string
+    {
+        if (preg_match('/^[ \t]*\'backend_apps\'\s*=>\s*\[/m', $content, $matches, PREG_OFFSET_CAPTURE)) {
+            $keyLineStart = $matches[0][1];
+            $openPos = strpos($content, '[', $keyLineStart);
+            $closePos = $openPos === false ? null : self::findClosingSquareBracket($content, $openPos);
+            if ($closePos === null) {
+                throw new Exception('Configuration file has no write permission');
+            }
+
+            $replaceStart = $keyLineStart;
+            $beforeKey = rtrim(substr($content, 0, $keyLineStart), "\r\n");
+            $previousLineStart = strrpos($beforeKey, "\n");
+            $previousLineStart = $previousLineStart === false ? 0 : $previousLineStart + 1;
+            $previousLine = substr($beforeKey, $previousLineStart);
+            if (str_contains($previousLine, '后台应用入口配置')) {
+                $replaceStart = $previousLineStart;
+            }
+
+            $replaceEnd = $closePos + 1;
+            if (($content[$replaceEnd] ?? '') === ',') {
+                $replaceEnd++;
+            }
+            if (($content[$replaceEnd] ?? '') === "\r") {
+                $replaceEnd++;
+            }
+            if (($content[$replaceEnd] ?? '') === "\n") {
+                $replaceEnd++;
+            }
+
+            return substr($content, 0, $replaceStart) . $block . "\n" . substr($content, $replaceEnd);
+        }
+
+        $insert = $block . "\n";
+        $marker = "    // 点选验证码配置";
+        $markerPos = strpos($content, $marker);
+        if ($markerPos !== false) {
+            return substr($content, 0, $markerPos) . $insert . substr($content, $markerPos);
+        }
+
+        $returnEndPos = strrpos($content, "\n];");
+        if ($returnEndPos !== false) {
+            return substr($content, 0, $returnEndPos + 1) . $insert . substr($content, $returnEndPos + 1);
+        }
+
+        throw new Exception('Configuration file has no write permission');
+    }
+
+    private static function findClosingSquareBracket(string $content, int $openPos): ?int
+    {
+        $depth = 0;
+        $quote = null;
+        $escape = false;
+        $length = strlen($content);
+        for ($i = $openPos; $i < $length; $i++) {
+            $char = $content[$i];
+            if ($quote !== null) {
+                if ($escape) {
+                    $escape = false;
+                    continue;
+                }
+                if ($char === '\\') {
+                    $escape = true;
+                    continue;
+                }
+                if ($char === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+
+            if ($char === '\'' || $char === '"') {
+                $quote = $char;
+                continue;
+            }
+            if ($char === '[') {
+                $depth++;
+                continue;
+            }
+            if ($char === ']') {
+                $depth--;
+                if ($depth === 0) {
+                    return $i;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static function buildBackendAppsConfigBlock(array $apps): string
+    {
+        $lines = [
+            '    // 后台应用入口配置，安装后台模块时会自动写入',
+            "    'backend_apps'          => [",
+        ];
+
+        foreach ($apps as $name => $appConfig) {
+            $lines[] = "        '" . self::escapePhpSingleQuotedString((string)$name) . "' => [";
+            $lines[] = "            'path' => '" . self::escapePhpSingleQuotedString((string)$appConfig['path']) . "',";
+            $lines[] = "            'app'  => '" . self::escapePhpSingleQuotedString((string)$appConfig['app']) . "',";
+            $lines[] = '        ],';
+        }
+
+        $lines[] = '    ],';
+        return implode("\n", $lines);
+    }
+
+    private static function escapePhpSingleQuotedString(string $value): string
+    {
+        return str_replace(['\\', "'"], ['\\\\', "\\'"], $value);
     }
 
     /**

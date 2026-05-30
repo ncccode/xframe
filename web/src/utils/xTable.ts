@@ -5,9 +5,9 @@ import Sortable from 'sortablejs'
 import { reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import type { xTableApi } from '/@/api/common'
+import { adminBackendApp, getBackendAppByPath } from '/@/utils/router'
 import { findIndexRow } from '/@/components/table'
 import { i18n } from '/@/lang/index'
-import { useAdminInfo } from '/@/stores/adminInfo'
 import { auth, getArrayKey } from '/@/utils/common'
 import { getUrl } from '/@/utils/axios'
 import { buildExportDownloadUrl, buildExportPayload } from '/@/utils/xTableExport'
@@ -160,7 +160,7 @@ export default class xTable {
     dataExport = () => {
         if (this.runBefore('dataExport') === false) return
         const route = useRoute()
-        const adminInfo = useAdminInfo()
+        const backendApp = getBackendAppByPath(route.fullPath || route.path) ?? adminBackendApp
 
         return this.api
             .export(
@@ -176,7 +176,8 @@ export default class xTable {
                         apiBaseUrl: getUrl(),
                         routePath: route.path,
                         taskId: res.data.id,
-                        token: adminInfo.getToken(),
+                        token: backendApp.getAuthToken(),
+                        tokenHeader: backendApp.tokenHeader,
                     })
                     return
                 }

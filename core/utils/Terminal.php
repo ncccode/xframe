@@ -385,8 +385,6 @@ class Terminal
     {
         if ($this->commandKey == 'test.pnpm') {
             @unlink(root_path() . 'public' . DIRECTORY_SEPARATOR . 'npm-install-test' . DIRECTORY_SEPARATOR . 'pnpm-lock.yaml');
-        } elseif ($this->commandKey == 'web-install.pnpm') {
-            @unlink(root_path() . 'web' . DIRECTORY_SEPARATOR . 'pnpm-lock.yaml');
         }
     }
 
@@ -478,9 +476,10 @@ class Terminal
 
     public static function changeTerminalConfig($config = []): bool
     {
-        // 丝保存在数杮库中，因为切杢包管睆器时，数杮库资料坯能还未酝置
-        $oldPackageManager = Config::get('terminal.npm_package_manager');
-        $newPackageManager = request()->post('manager', $config['manager'] ?? $oldPackageManager);
+        $oldPackageManager = (string)Config::get('terminal.npm_package_manager');
+        $newPackageManager = array_key_exists('manager', $config)
+            ? (string)$config['manager']
+            : (string)request()->post('manager', $oldPackageManager);
 
         if ($oldPackageManager == $newPackageManager) {
             return true;
@@ -488,9 +487,27 @@ class Terminal
 
         $buildConfigFile    = config_path() . 'terminal.php';
         $buildConfigContent = @file_get_contents($buildConfigFile);
-        $buildConfigContent = preg_replace("/'npm_package_manager'(\s+)=>(\s+)'$oldPackageManager'/", "'npm_package_manager'\$1=>\$2'$newPackageManager'", $buildConfigContent);
-        $result             = @file_put_contents($buildConfigFile, $buildConfigContent);
-        return (bool)$result;
+        if (!is_string($buildConfigContent)) {
+            return false;
+        }
+
+        $allowedManagers = ['npm', 'cnpm', 'yarn', 'pnpm', 'ni', 'none'];
+        if (!in_array($newPackageManager, $allowedManagers, true)) {
+            return false;
+        }
+
+        $buildConfigContent = preg_replace(
+            "/('npm_package_manager'\s*=>\s*)'[^']*'/",
+            "\$1'" . $newPackageManager . "'",
+            $buildConfigContent,
+            1,
+            $count
+        );
+        if ($buildConfigContent === null || $count < 1) {
+            return false;
+        }
+
+        return @file_put_contents($buildConfigFile, $buildConfigContent) !== false;
     }
 
     protected function eventStreamResponse(): Response

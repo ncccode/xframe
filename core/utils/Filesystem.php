@@ -174,11 +174,11 @@ class Filesystem
         try {
             foreach ($files as $v) {
                 if (is_array($v) && isset($v['file']) && isset($v['name'])) {
-                    $filePath = base_path() . str_replace(base_path(), '', self::fsFit($v['file']));
+                    $filePath = base_path(ltrim(str_replace(base_path(), '', self::fsFit($v['file'])), DIRECTORY_SEPARATOR));
                     $zip->addFile($filePath, $v['name']);
                 } else {
-                    $saveFile = str_replace(base_path(), '', self::fsFit($v));
-                    $zip->addFile(base_path() . $saveFile, $saveFile);
+                    $saveFile = ltrim(str_replace(base_path(), '', self::fsFit($v)), DIRECTORY_SEPARATOR);
+                    $zip->addFile(base_path($saveFile), $saveFile);
                 }
             }
             if (!$zip->close()) {

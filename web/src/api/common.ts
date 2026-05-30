@@ -178,13 +178,13 @@ export function checkClickCaptcha(id: string, info: string, unset: boolean, apiB
     )
 }
 
-export function refreshToken() {
+export function refreshToken(refreshTokenValue = '') {
     const adminInfo = useAdminInfo()
     return createAxios({
         url: refreshTokenUrl,
         method: 'POST',
         data: {
-            refreshToken: adminInfo.getToken('refresh'),
+            refreshToken: refreshTokenValue || adminInfo.getToken('refresh'),
         },
     })
 }

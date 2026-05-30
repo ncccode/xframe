@@ -2,12 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 import staticRoutes from '/@/router/static'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
+import { backendApps } from '/@/utils/router'
 import { loading } from '/@/utils/loading'
 import langAutoLoadMap from '/@/lang/autoload'
 import { mergeMessage } from '/@/lang/index'
 import { useConfig } from '/@/stores/config'
-import { isAdminApp } from '/@/utils/common'
 import { loadRouteLangMessages } from './langLoader'
 
 const router = createRouter({
@@ -28,11 +27,10 @@ router.beforeEach(async (to) => {
     await loadRouteLangMessages({
         to,
         defaultLang: config.lang.defaultLang,
-        adminBaseRoutePath,
+        backendApps,
         langAutoLoadMap,
         loadLangHandle: window.loadLangHandle,
         mergeMessage,
-        isAdminApp,
     })
     // 动态加载语言包-end
 })

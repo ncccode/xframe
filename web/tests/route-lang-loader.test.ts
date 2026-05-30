@@ -13,9 +13,8 @@ async function run() {
     const paths = resolveRouteLangLoadPaths({
         to,
         defaultLang: 'zh-cn',
-        adminBaseRoutePath: '/admin',
+        backendApps: [{ name: 'admin', baseRoutePath: '/admin' }],
         langAutoLoadMap: {},
-        isAdminApp: () => true,
     })
 
     assert.deepEqual(paths, ['./admin/zh-cn/system/errorLog.ts', './admin/zh-cn.ts'])
@@ -46,10 +45,9 @@ async function run() {
     await loadRouteLangMessages({
         to,
         defaultLang: 'zh-cn',
-        adminBaseRoutePath: '/admin',
+        backendApps: [{ name: 'admin', baseRoutePath: '/admin' }],
         langAutoLoadMap: {},
         loadLangHandle,
-        isAdminApp: () => true,
         mergeMessage: (message, pathName = '') => {
             merged.push({ message, pathName })
         },
