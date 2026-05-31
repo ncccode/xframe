@@ -14,6 +14,12 @@ export interface moduleInfo {
     version: string
     state: number
     website: string
+    installed?: boolean
+    installSource?: string
+    type?: string
+    logo?: string
+    images?: string[]
+    tags?: anyObj[]
     stateTag: {
         type: string
         text: string

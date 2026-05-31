@@ -39,7 +39,12 @@ const loadIndex = () => {
         state.table.indexLoaded = true
         state.sysVersion = res.data.sysVersion
         state.nuxtVersion = res.data.nuxtVersion
-        state.installedModule = res.data.installed
+        state.installedModule = (res.data.installed || []).map((item: anyObj) => {
+            return {
+                ...item,
+                installed: true,
+            }
+        })
 
         const installedModuleUids: string[] = []
         const installedModuleVersions: { uid: string; version: string }[] = []
@@ -94,15 +99,22 @@ const getModules = () => {
             state.table.modulesEbak[params.activeTab] = res.data.rows.map((item: anyObj) => {
                 const idx = state.installedModuleUids.indexOf(item.uid)
                 if (idx !== -1) {
-                    item.state = state.installedModule[idx].state
-                    item.title = state.installedModule[idx].title
-                    item.version = state.installedModule[idx].version
-                    item.website = state.installedModule[idx].website
+                    const installedItem = state.installedModule[idx]
+                    if (isLocalUploadModule(installedItem)) {
+                        return buildLocalModuleInfo(installedItem)
+                    }
+
+                    item.installed = true
+                    item.installSource = installedItem.installSource || item.installSource
+                    item.state = installedItem.state
+                    item.title = installedItem.title
+                    item.version = installedItem.version
+                    item.website = installedItem.website
                     item.stateTag = moduleStatus(item.state)
 
                     if (!isArray(item.tags)) item.tags = []
                     item.tags.push({
-                        name: `${moduleStatus(item.state).text} v${state.installedModule[idx].version}`,
+                        name: `${moduleStatus(item.state).text} v${installedItem.version}`,
                         type: item.stateTag.type || 'primary',
                     })
                 } else {
@@ -133,6 +145,12 @@ export const showInfo = (uid: string) => {
     const localItem = state.installedModule.find((item) => {
         return item.uid == uid
     })
+
+    if (localItem && isLocalUploadModule(localItem)) {
+        state.goodsInfo = buildLocalModuleInfo(localItem)
+        state.loading.goodsInfo = false
+        return
+    }
 
     info({
         uid: uid,
@@ -445,8 +463,36 @@ export const onEnable = (uid: string) => {
 const modulesOnlyLocalHandle = (modules: anyObj) => {
     if (!state.table.onlyLocal) return modules
     return modules.filter((item: anyObj) => {
-        return item.installed
+        return item.installed || state.installedModuleUids.includes(item.uid)
     })
+}
+
+const isLocalUploadModule = (item?: anyObj) => {
+    return item?.installSource === 'local'
+}
+
+const buildLocalModuleInfo = (item: anyObj) => {
+    const stateTag = moduleStatus(item.state)
+    const tags = isArray(item.tags) ? [...item.tags] : []
+    const statusTagName = `${stateTag.text} v${item.version}`
+    if (!tags.some((tag: anyObj) => tag.name === statusTagName)) {
+        tags.push({
+            name: statusTagName,
+            type: stateTag.type || 'primary',
+        })
+    }
+    const images = isArray(item.images) && item.images.length > 0 ? item.images : [localModuleLogo]
+
+    return {
+        ...item,
+        installed: true,
+        type: 'local',
+        logo: item.logo || localModuleLogo,
+        images,
+        stateTag,
+        tags,
+        enable: item.state === moduleInstallState.DISABLE ? false : true,
+    }
 }
 
 export const execCommand = (data: anyObj) => {

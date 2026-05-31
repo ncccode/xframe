@@ -78,6 +78,29 @@
             </el-badge>
         </div>
 
+        <!-- 清理缓存 - 仅超管 -->
+        <el-dropdown
+            v-if="adminInfo.super"
+            @visible-change="onCurrentNavMenu($event, 'clear')"
+            class="h100"
+            size="large"
+            :hide-timeout="50"
+            placement="bottom"
+            trigger="click"
+            :hide-on-click="true"
+        >
+            <div class="nav-menu-item" :class="state.currentNavMenu == 'clear' ? 'hover' : ''" :title="t('layouts.Clear cache')">
+                <Icon :color="configStore.getColorVal('headerBarTabColor')" class="nav-menu-icon" name="el-icon-Delete" size="18" />
+            </div>
+            <template #dropdown>
+                <el-dropdown-menu class="dropdown-menu-box">
+                    <el-dropdown-item @click="onClearCache('tp')">{{ t('utils.Clean up system cache') }}</el-dropdown-item>
+                    <el-dropdown-item @click="onClearCache('storage')">{{ t('utils.Clean up browser cache') }}</el-dropdown-item>
+                    <el-dropdown-item @click="onClearCache('all')" divided>{{ t('utils.Clean up all cache') }}</el-dropdown-item>
+                </el-dropdown-menu>
+            </template>
+        </el-dropdown>
+
         <!-- 管理员信息 -->
         <el-popover
             v-if="siteConfig.userInitialize"
@@ -105,6 +128,7 @@
                     </div>
                 </div>
                 <div class="admin-info-footer">
+                    <el-button @click="onProfile" type="primary" plain>{{ t('layouts.Profile') }}</el-button>
                     <el-button @click="onLogout" type="danger" plain>{{ t('layouts.Logout') }}</el-button>
                 </div>
             </div>
@@ -126,17 +150,19 @@ import screenfull from 'screenfull'
 import { reactive, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Config from './config.vue'
-import { logout } from '/@/api/admin/index'
+import { clearCache, logout } from '/@/api/admin/index'
 import Terminal from '/@/components/terminal/index.vue'
 import { editDefaultLang } from '/@/lang'
 import router from '/@/router'
+import { adminBaseRoutePath } from '/@/router/static/adminBase'
 import { useAdminInfo } from '/@/stores/adminInfo'
 import { useConfig } from '/@/stores/config'
-import { ADMIN_INFO } from '/@/stores/constant/cacheKey'
+import { ADMIN_INFO, X_ACCOUNT } from '/@/stores/constant/cacheKey'
 import { useSiteConfig } from '/@/stores/siteConfig'
 import { useTerminal } from '/@/stores/terminal'
 import { fullUrl, timeFormat } from '/@/utils/common'
-import { Local } from '/@/utils/storage'
+import { routePush } from '/@/utils/router'
+import { Local, Session } from '/@/utils/storage'
 import { hotUpdateState, reloadServer } from '/@/utils/vite'
 
 const { t } = useI18n()
@@ -175,6 +201,27 @@ const onFullScreen = () => {
     screenfull.onchange(() => {
         state.isFullScreen = screenfull.isFullscreen
     })
+}
+
+const onClearCache = (type: 'tp' | 'storage' | 'all') => {
+    if (type == 'storage' || type == 'all') {
+        const adminInfoCache = Local.get(ADMIN_INFO)
+        const xAccount = Local.get(X_ACCOUNT)
+        Session.clear()
+        Local.clear()
+        Local.set(ADMIN_INFO, adminInfoCache)
+        Local.set(X_ACCOUNT, xAccount)
+        if (type == 'storage') return
+    }
+    clearCache(type)
+}
+
+const onProfile = () => {
+    state.showAdminInfoPopover = false
+    const profilePath = `${adminBaseRoutePath}/system/adminInfo`
+    if (router.currentRoute.value.path != profilePath) {
+        routePush(profilePath)
+    }
 }
 
 const onLogout = () => {

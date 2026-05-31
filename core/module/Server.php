@@ -459,6 +459,9 @@ class Server
             if (!isset($info['uid'])) {
                 continue;
             }
+            $runtime               = self::getRuntime($tempDir);
+            $info['installed']     = true;
+            $info['installSource'] = (string)($runtime['installSource'] ?? ($info['installSource'] ?? ''));
             $installedList[] = $info;
         }
         return $installedList;

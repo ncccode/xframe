@@ -220,6 +220,7 @@ class Manage
         Server::createRuntime($this->modulesDir, [
             'moduleMD5'     => $moduleMD5 ?? '',
             'moduleComment' => $moduleComment ?? '',
+            'installSource' => 'market',
         ]);
 
         return $zipFile;
@@ -317,8 +318,10 @@ class Manage
         Server::createRuntime($this->modulesDir, [
             'moduleMD5'     => $moduleMD5 ?? '',
             'moduleComment' => $moduleComment ?? '',
+            'installSource' => 'local',
         ]);
 
+        $info['installSource'] = 'local';
         return $info;
     }
 

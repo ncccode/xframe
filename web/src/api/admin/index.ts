@@ -31,6 +31,21 @@ export function logout() {
     })
 }
 
+export function clearCache(type = 'all') {
+    return createAxios(
+        {
+            url: '/admin/Ajax/clearCache',
+            method: 'POST',
+            data: {
+                type,
+            },
+        },
+        {
+            showSuccessMessage: true,
+        }
+    )
+}
+
 export function xAccountCheckIn(params: object = {}) {
     const siteConfig = useSiteConfig()
     return createAxios(

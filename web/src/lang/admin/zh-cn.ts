@@ -95,6 +95,7 @@ export default {
         'Are you sure you want to restore all configurations to the default values?': '确定要恢复全部配置到默认值吗？',
         'Restore default': '恢复默认',
         Profile: '个人资料',
+        'Clear cache': '清除缓存',
         Logout: '注销',
         'Dark mode': '暗黑模式',
         'Exit full screen': '退出全屏',

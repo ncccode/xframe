@@ -3,11 +3,13 @@
 /.vscode
 /vendor
 *.log
-.DS_Store
 .env
 /tests/tmp
 /tests/.phpunit.result.cache
 /web/dist
 /web/node_modules
 /web/package-lock.json
-/public
+/public/*
+!/public/static/
+!/public/static/**
+**/.DS_Store

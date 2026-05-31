@@ -96,6 +96,7 @@ export default {
             'Are you sure to restore all configurations to the default values?',
         'Restore default': 'Restore default',
         Profile: 'Profile',
+        'Clear cache': 'Clear cache',
         Logout: 'Logout',
         'Dark mode': 'Dark mode',
         'Exit full screen': 'Exit Full Screen',
