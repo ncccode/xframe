@@ -21,6 +21,8 @@ export const inputTypes = [
     'selects',
     'remoteSelect',
     'remoteSelects',
+    'tableSelect',
+    'tableSelects',
     'editor',
     'city',
     'image',
@@ -124,6 +126,20 @@ export interface InputAttr extends InputData {
     remoteUrl?: string
     tooltipParams?: anyObj
     escBlur?: boolean
+    // 表格选择器属性
+    columns?: anyObj[]
+    column?: anyObj[]
+    search?: anyObj[]
+    quickSearch?: boolean
+    keywordPlaceholder?: string
+    showSearchReset?: boolean
+    tableAttrs?: anyObj
+    pagination?: boolean | anyObj
+    rowKey?: string | Function
+    tableHeight?: number | string
+    popperMinWidth?: number | string
+    request?: Function
+    parseData?: Function
     // 图标选择器属性
     showIconName?: boolean
     placement?: string

@@ -8,6 +8,7 @@ type TableRenderer =
     | 'icon'
     | 'image'
     | 'images'
+    | 'input'
     | 'switch'
     | 'tag'
     | 'tags'

@@ -10,6 +10,7 @@ import XUpload from '/@/components/formInput/components/xUpload.vue'
 import Editor from '/@/components/formInput/components/editor.vue'
 import IconSelector from '/@/components/formInput/components/iconSelector.vue'
 import RemoteSelect from '/@/components/formInput/components/remoteSelect.vue'
+import TableSelect from '/@/components/formInput/components/tableSelect.vue'
 
 export default defineComponent({
     name: 'formInput',
@@ -230,6 +231,21 @@ export default defineComponent({
                 )
         }
 
+        // tableSelect tableSelects
+        const tableSelect = () => {
+            return () =>
+                createVNode(
+                    TableSelect,
+                    {
+                        modelValue: props.modelValue,
+                        'onUpdate:modelValue': onValueUpdate,
+                        multiple: props.type == 'tableSelect' ? false : true,
+                        ...attrs.value,
+                    },
+                    slots
+                )
+        }
+
         const buildFun = new Map([
             ['string', bases],
             [
@@ -355,6 +371,8 @@ export default defineComponent({
             ],
             ['remoteSelect', remoteSelect],
             ['remoteSelects', remoteSelect],
+            ['tableSelect', tableSelect],
+            ['tableSelects', tableSelect],
             [
                 'city',
                 () => {

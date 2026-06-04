@@ -138,6 +138,22 @@ export const fieldData: FieldData = {
         defaultType: 'EMPTY STRING',
         ...npuaFalse(),
     },
+    tableSelect: {
+        type: 'int',
+        length: 10,
+        precision: 0,
+        defaultType: 'NULL',
+        ...npuaFalse(),
+        null: true,
+        unsigned: true,
+    },
+    tableSelects: {
+        type: 'varchar',
+        length: 255,
+        precision: 0,
+        defaultType: 'EMPTY STRING',
+        ...npuaFalse(),
+    },
     editor: {
         type: 'text',
         length: 0,

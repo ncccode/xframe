@@ -5,6 +5,7 @@ import type {
     ElTooltipProps,
     FormInstance,
     ImageProps,
+    InputProps,
     PopconfirmProps,
     SwitchProps,
     TableColumnCtx,
@@ -314,6 +315,7 @@ declare global {
             tag?: TableContextDataFun<TagProps>
             icon?: TableContextDataFun<InstanceType<typeof Icon>['$props']>
             image?: TableContextDataFun<ImageProps>
+            input?: TableContextDataFun<InputProps>
             switch?: TableContextDataFun<SwitchProps>
             tooltip?: TableContextDataFun<ElTooltipProps>
             [key: string]: any
