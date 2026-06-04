@@ -83,6 +83,55 @@ export default class xTable {
     }
 
     /**
+     * 字段是否可用于公共搜索
+     */
+    isComSearchColumn = (field: TableColumn) => {
+        if (!field.prop || field.operator === false) return false
+        if (field.type === 'selection' || field.type === 'index' || field.type === 'expand' || field.render === 'buttons') return false
+
+        if (
+            typeof field.operator == 'undefined' &&
+            field.render &&
+            ['customRender', 'customTemplate', 'icon', 'image', 'images', 'slot'].includes(field.render)
+        ) {
+            return false
+        }
+
+        return true
+    }
+
+    /**
+     * 未显式配置公共搜索操作符时，按字段表现推断一个更贴近日常列表的默认值
+     */
+    getComSearchOperator = (field: TableColumn): OperatorStr | false => {
+        if (field.operator === false) return false
+        if (field.operator === true) return '='
+        if (typeof field.operator != 'undefined') return field.operator
+        if (!this.isComSearchColumn(field)) return false
+
+        const prop = String(field.prop)
+        const render = field.comSearchRender || field.render
+        if (['date', 'datetime', 'time'].includes(String(render)) || /(^|_)(date|time)$/.test(prop)) {
+            return 'RANGE'
+        }
+        if (field.render == 'tag' || field.render == 'tags' || field.render == 'switch' || field.comSearchRender == 'select' || field.replaceValue) {
+            return '='
+        }
+        if (prop === this.table.pk || prop == 'id' || prop.endsWith('_id')) {
+            return '='
+        }
+        if (
+            /(^|_)(amount|balance|commission|cost|count|expense|experience|income|money|num|price|quantity|refund|sales|score|sort|stock|total|weight)(_|$)/.test(
+                prop
+            )
+        ) {
+            return 'RANGE'
+        }
+
+        return 'LIKE'
+    }
+
+    /**
      * 运行前置函数
      * @param funName 函数名
      * @param args 参数
@@ -579,12 +628,10 @@ export default class xTable {
 
         for (const key in field) {
             // 关闭搜索的字段
-            if (field[key].operator === false) continue
+            if (!this.isComSearchColumn(field[key])) continue
 
             // 取默认操作符号
-            if (typeof field[key].operator == 'undefined') {
-                field[key].operator = 'eq'
-            }
+            field[key].operator = this.getComSearchOperator(field[key])
 
             // 公共搜索表单字段初始化
             const prop = field[key].prop

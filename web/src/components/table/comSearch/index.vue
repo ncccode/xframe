@@ -8,7 +8,7 @@
                 :model="xTable.comSearch.form"
             >
                 <el-row>
-                    <template v-for="(item, idx) in xTable.table.column" :key="idx">
+                    <template v-for="(item, idx) in searchableColumns" :key="idx">
                         <template v-if="item.operator !== false">
                             <!-- 自定义渲染 component、slot -->
                             <el-col
@@ -44,8 +44,7 @@
                                     (item.render == 'datetime' || item.comSearchRender == 'datetime' || item.comSearchRender == 'date') &&
                                     (item.operator == 'RANGE' || item.operator == 'NOT RANGE')
                                 "
-                                :xs="24"
-                                :sm="12"
+                                v-bind="{ xs: 24, sm: 12, ...item.comSearchColAttr }"
                             >
                                 <div class="com-search-col" :class="item.prop">
                                     <div class="com-search-col-label w16" v-if="item.comSearchShowLabel !== false">{{ item.label }}</div>
@@ -69,8 +68,7 @@
                             <!-- 时间范围 -->
                             <el-col
                                 v-else-if="item.comSearchRender == 'time' && (item.operator == 'RANGE' || item.operator == 'NOT RANGE')"
-                                :xs="24"
-                                :sm="12"
+                                v-bind="{ xs: 24, sm: 12, ...item.comSearchColAttr }"
                             >
                                 <div class="com-search-col" :class="item.prop">
                                     <div class="com-search-col-label w16" v-if="item.comSearchShowLabel !== false">{{ item.label }}</div>
@@ -91,7 +89,7 @@
                             </el-col>
 
                             <!-- 其他 -->
-                            <el-col v-else :xs="24" :sm="6">
+                            <el-col v-else v-bind="{ xs: 24, sm: 6, ...item.comSearchColAttr }">
                                 <div class="com-search-col" :class="item.prop">
                                     <div class="com-search-col-label" v-if="item.comSearchShowLabel !== false">{{ item.label }}</div>
                                     <!-- 数字范围 -->
@@ -221,12 +219,13 @@
 </template>
 
 <script setup lang="ts">
-import { inject } from 'vue'
+import { computed, inject } from 'vue'
 import type xTableClass from '/@/utils/xTable'
 import { isArray, isEmpty, isUndefined } from 'lodash-es'
 import FormInput from '/@/components/formInput/index.vue'
 
 const xTable = inject('xTable') as xTableClass
+const searchableColumns = computed(() => xTable.table.column.filter((item) => xTable.isComSearchColumn(item)))
 
 const onResetForm = () => {
     /**

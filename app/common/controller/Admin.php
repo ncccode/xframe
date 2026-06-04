@@ -11,6 +11,8 @@ use app\common\middleware\AdminLog as AdminLogMiddleware;
 
 class Admin extends BaseController
 {
+    protected array $searchFieldTypeCache = [];
+
     protected array $middleware = [
         AdminAuth::class,
         AdminLogMiddleware::class,
@@ -154,12 +156,12 @@ class Admin extends BaseController
             return [];
         }
         $pk           = $this->model->getPk();
-        $quickSearch  = $this->request->get("quickSearch", '');
-        $limit        = $this->request->get("limit", 10);
-        $search       = $this->request->get("search", []);
-        $initKey      = $this->request->get("initKey", $pk);
-        $initValue    = $this->request->get("initValue", '');
-        $initOperator = $this->request->get("initOperator", 'in');
+        $quickSearch  = $this->request->input("quickSearch", '');
+        $limit        = $this->request->input("limit", 10);
+        $search       = $this->request->input("search", []);
+        $initKey      = $this->request->input("initKey", $pk);
+        $initValue    = $this->request->input("initValue", '');
+        $initOperator = $this->request->input("initOperator", 'in');
 
         $where              = [];
         $modelTable         = strtolower($this->model->getTable());
@@ -206,16 +208,17 @@ class Admin extends BaseController
 
             // 日期时间
             if (isset($field['render']) && $field['render'] == 'datetime') {
+                $isTimestampField = $this->isTimestampSearchField((string)$field['field']);
                 if ($field['operator'] == 'RANGE') {
                     $datetimeArr = explode(',', $field['val']);
                     if (!isset($datetimeArr[1])) {
                         continue;
                     }
-                    $datetimeArr = array_filter(array_map("strtotime", $datetimeArr));
+                    $datetimeArr = $isTimestampField ? array_filter(array_map("strtotime", $datetimeArr)) : $datetimeArr;
                     $where[]     = [$fieldName, str_replace('RANGE', 'BETWEEN', $field['operator']), $datetimeArr];
                     continue;
                 }
-                $where[] = [$fieldName, '=', strtotime($field['val'])];
+                $where[] = [$fieldName, '=', $isTimestampField ? strtotime($field['val']) : $field['val']];
                 continue;
             }
 
@@ -354,5 +357,22 @@ class Admin extends BaseController
         ];
 
         return $alias[$operator] ?? $operator;
+    }
+
+    protected function isTimestampSearchField(string $field): bool
+    {
+        $field = str_contains($field, '.') ? substr($field, strrpos($field, '.') + 1) : $field;
+        $table = $this->model->getTable();
+
+        if (!array_key_exists($table, $this->searchFieldTypeCache)) {
+            try {
+                $this->searchFieldTypeCache[$table] = $this->model->getQuery()->getFieldsType();
+            } catch (Throwable) {
+                $this->searchFieldTypeCache[$table] = [];
+            }
+        }
+
+        $type = strtolower((string)($this->searchFieldTypeCache[$table][$field] ?? ''));
+        return $type !== '' && (bool)preg_match('/^(bigint|int|integer|mediumint|smallint|tinyint)/', $type);
     }
 }

@@ -4,7 +4,7 @@
 
     <!-- 公共搜索 -->
     <el-collapse-transition>
-        <ComSearch v-if="props.buttons.includes('comSearch') && xTable.table.showComSearch">
+        <ComSearch v-if="hasComSearch && xTable.table.showComSearch">
             <template v-for="(slot, idx) in $slots" :key="idx" #[idx]>
                 <slot :name="idx"></slot>
             </template>
@@ -93,15 +93,9 @@
                 :placeholder="quickSearchPlaceholder ? quickSearchPlaceholder : t('Search')"
                 clearable
             />
-            <div class="table-search-button-group" v-if="props.buttons.includes('columnDisplay') || props.buttons.includes('comSearch')">
+            <div class="table-search-button-group" v-if="props.buttons.includes('columnDisplay') || hasComSearch">
                 <el-dropdown v-if="props.buttons.includes('columnDisplay')" :max-height="380" :hide-on-click="false">
-                    <el-button
-                        class="table-search-button-item"
-                        :class="props.buttons.includes('comSearch') ? 'right-border' : ''"
-                        color="#dcdfe6"
-                        plain
-                        v-blur
-                    >
+                    <el-button class="table-search-button-item" :class="hasComSearch ? 'right-border' : ''" color="#dcdfe6" plain v-blur>
                         <Icon size="14" name="el-icon-Grid" />
                     </el-button>
                     <template #dropdown>
@@ -119,12 +113,7 @@
                         </el-dropdown-menu>
                     </template>
                 </el-dropdown>
-                <el-tooltip
-                    v-if="props.buttons.includes('comSearch')"
-                    :disabled="xTable.table.showComSearch"
-                    :content="t('Expand generic search')"
-                    placement="top"
-                >
+                <el-tooltip v-if="hasComSearch" :disabled="xTable.table.showComSearch" :content="t('Expand generic search')" placement="top">
                     <el-button
                         class="table-search-button-item"
                         @click="xTable.table.showComSearch = !xTable.table.showComSearch"
@@ -171,6 +160,7 @@ const columnDisplay = computed(() => {
     return columnDisplayArr
 })
 
+const hasComSearch = computed(() => props.buttons.includes('comSearch') && xTable.table.column.some((item) => xTable.isComSearchColumn(item)))
 const enableBatchOpt = computed(() => (xTable.table.selection!.length > 0 ? true : false))
 
 const onAction = (event: XTableHeaderActionEventName, data: anyObj = {}) => {

@@ -290,6 +290,8 @@ declare global {
     interface TableColumn extends Partial<TableColumnCtx<TableRow>> {
         // 是否于表格显示此列
         show?: boolean
+        // 是否允许导出此列；当 show=false 且 export=true 时，该列仅参与导出
+        export?: boolean
         // 渲染器组件名，即 \src\components\table\fieldRender\ 中的组件之一，也可以查看 TableRenderer 类型定义
         render?: TableRenderer
         // 值替换数据（字典数据），同时用于单元格渲染时和作为公共搜索下拉框数据，格式如：{ open: '开', close: '关', disable: '已禁用' }
@@ -341,7 +343,7 @@ declare global {
         // 单元格渲染组件的 key，默认将根据列配置等属性自动生成（此 key 值改变时单元格将自动重新渲染）
         getRenderKey?: (row: TableRow, field: TableColumn, column: TableColumnCtx<TableRow>, index: number) => string
 
-        // 公共搜索操作符，默认值为 = ，值为 false 禁用此字段公共搜索，支持的操作符见下类型定义
+        // 公共搜索操作符，未设置时按字段渲染类型推断，值为 false 禁用此字段公共搜索，支持的操作符见下类型定义
         operator?: boolean | OperatorStr
         // 公共搜索框的 placeholder
         operatorPlaceholder?: string | string[]
@@ -351,7 +353,7 @@ declare global {
         comSearchCustomRender?: string | Component
         // 公共搜索自定义渲染为 slot 时，slot 的名称
         comSearchSlotName?: string
-        // 公共搜索自定义渲染时，外层 el-col 的属性（仅 customRender、slot 支持）
+        // 公共搜索外层 el-col 的属性
         comSearchColAttr?: Partial<ColProps>
         // 公共搜索是否显示字段的 label
         comSearchShowLabel?: boolean

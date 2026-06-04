@@ -621,7 +621,8 @@ trait Admin
             if (!is_array($column)) {
                 continue;
             }
-            if (($column['export'] ?? true) === false || ($column['show'] ?? true) === false) {
+            $export = $column['export'] ?? null;
+            if ($export === false || (($column['show'] ?? true) === false && $export !== true)) {
                 continue;
             }
             if (isset($column['type']) || !isset($column['prop']) || !isset($column['label'])) {
