@@ -854,4 +854,85 @@ class Server
             $zip->close();
         }
     }
+
+    public static function isValidModuleUid(string $uid): bool
+    {
+        return (bool)preg_match('/^[A-Za-z][A-Za-z0-9_]{1,63}$/', $uid);
+    }
+
+    /**
+     * @throws Throwable
+     */
+    public static function assertValidModuleUid(string $uid): void
+    {
+        if (!self::isValidModuleUid($uid)) {
+            throw new Exception('Module uid format error');
+        }
+    }
+
+    /**
+     * @throws Throwable
+     */
+    public static function assertTrustedModulePackage(string $dir): void
+    {
+        $signatureConfig = Config::get('xframe.module_signature', []);
+        $required = filter_var($signatureConfig['required'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        if (!$required) {
+            return;
+        }
+
+        $publicKey = trim((string)($signatureConfig['public_key'] ?? ''));
+        if ($publicKey === '') {
+            throw new Exception('Module signing public key is not configured');
+        }
+
+        $signatureFile = rtrim(Filesystem::fsFit($dir), '/\\') . DIRECTORY_SEPARATOR . 'signature.json';
+        $signatureData = is_file($signatureFile) ? json_decode((string)file_get_contents($signatureFile), true) : null;
+        if (!is_array($signatureData)) {
+            throw new Exception('Module package signature missing');
+        }
+
+        $digest = self::modulePackageDigest($dir);
+        if (($signatureData['digest'] ?? '') !== $digest) {
+            throw new Exception('Module package digest mismatch');
+        }
+
+        $signature = base64_decode((string)($signatureData['signature'] ?? ''), true);
+        if ($signature === false || $signature === '') {
+            throw new Exception('Module package signature invalid');
+        }
+
+        $result = openssl_verify($digest, $signature, $publicKey, OPENSSL_ALGO_SHA256);
+        if ($result !== 1) {
+            throw new Exception('Module package signature verification failed');
+        }
+    }
+
+    public static function modulePackageDigest(string $dir): string
+    {
+        $dir = rtrim(Filesystem::fsFit($dir), '/\\') . DIRECTORY_SEPARATOR;
+        $files = [];
+        foreach (
+            new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+                RecursiveIteratorIterator::SELF_FIRST
+            ) as $item
+        ) {
+            if (!$item->isFile()) {
+                continue;
+            }
+            $relative = str_replace('\\', '/', str_replace($dir, '', $item->getPathname()));
+            if (in_array($relative, ['.runtime', 'signature.json'], true)) {
+                continue;
+            }
+            $files[$relative] = $item->getPathname();
+        }
+        ksort($files);
+
+        $context = hash_init('sha256');
+        foreach ($files as $relative => $path) {
+            hash_update($context, $relative . "\n" . hash_file('sha256', $path) . "\n");
+        }
+        return 'sha256:' . hash_final($context);
+    }
 }

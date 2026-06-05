@@ -38,8 +38,6 @@ class AdminAuth implements MiddlewareInterface
             $token = (string) (
                 $request->header('xtoken')
                 ?: $request->header('x-token')
-                ?: $request->input('xtoken')
-                ?: $request->input('x-token')
                 ?: \get_auth_token()
             );
             if ($token) {

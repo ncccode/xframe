@@ -39,7 +39,7 @@ class Local extends Driver
      */
     public function save(UploadFile $file, string $saveName): bool
     {
-        $saveName = $this->getFullPath($saveName, true);
+        $saveName = $this->getWritableFullPath($saveName);
         $file->move($saveName);
         @chmod($saveName, 0666 & ~umask());
         return true;
@@ -52,11 +52,11 @@ class Local extends Driver
      */
     public function delete(string $saveName): bool
     {
-        $saveFullName = $this->getFullPath($saveName, true);
-        if ($this->exists($saveFullName)) {
+        $saveFullName = $this->getExistingFullPath($saveName);
+        if ($saveFullName && is_file($saveFullName)) {
             @unlink($saveFullName);
+            Filesystem::delEmptyDir(dirname($saveFullName));
         }
-        Filesystem::delEmptyDir(dirname($saveFullName));
         return true;
     }
 
@@ -94,8 +94,8 @@ class Local extends Driver
      */
     public function exists(string $saveName): bool
     {
-        $saveFullName = $this->getFullPath($saveName, true);
-        return file_exists($saveFullName);
+        $saveFullName = $this->getExistingFullPath($saveName);
+        return $saveFullName !== '' && file_exists($saveFullName);
     }
 
     /**
@@ -126,5 +126,56 @@ class Local extends Driver
     public function getRootPath(): string
     {
         return rtrim(Filesystem::fsFit(str_replace($this->options['url'], '', $this->options['root'])), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+    }
+
+    protected function getExistingFullPath(string $saveName): string
+    {
+        $path = realpath($this->getFullPath($saveName, true));
+        if (!$path) {
+            return '';
+        }
+
+        $root = realpath($this->getRootPath());
+        if (!$root) {
+            return '';
+        }
+
+        $path = rtrim(Filesystem::fsFit($path), DIRECTORY_SEPARATOR);
+        $root = rtrim(Filesystem::fsFit($root), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($path . DIRECTORY_SEPARATOR, $root)) {
+            return '';
+        }
+
+        return $path;
+    }
+
+    protected function getWritableFullPath(string $saveName): string
+    {
+        if (
+            str_contains($saveName, "\0")
+            || preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $saveName)
+            || preg_match('/^[A-Za-z]:[\\\\/]/', $saveName)
+        ) {
+            throw new FileException('Upload path is not allowed');
+        }
+
+        $fullPath = $this->getFullPath($saveName, true);
+        $root = realpath($this->getRootPath());
+        $dirname = dirname($fullPath);
+        if (!is_dir($dirname)) {
+            mkdir($dirname, 0777, true);
+        }
+        $dir = realpath($dirname);
+        if (!$root || !$dir) {
+            throw new FileException('Upload directory does not exist');
+        }
+
+        $root = rtrim(Filesystem::fsFit($root), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        $dir = rtrim(Filesystem::fsFit($dir), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($dir, $root)) {
+            throw new FileException('Upload path is not allowed');
+        }
+
+        return $fullPath;
     }
 }

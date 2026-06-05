@@ -152,7 +152,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="goods-detail x-markdown" v-html="state.goodsInfo.detail_editor"></div>
+                <div class="goods-detail x-markdown" v-html="sanitizeHtml(state.goodsInfo.detail_editor)"></div>
                 <div class="goods-version">
                     <h1>{{ t('module.Update Log') }}</h1>
                     <div class="version-timeline" v-if="state.goodsInfo.version_log">
@@ -173,7 +173,7 @@
                                     </template>
                                     <div
                                         class="version-detail x-markdown"
-                                        v-html="version.describe ? version.describe : t('module.No detailed update log')"
+                                        v-html="sanitizeHtml(version.describe ? version.describe : t('module.No detailed update log'))"
                                     ></div>
                                 </el-card>
                             </el-timeline-item>
@@ -194,6 +194,7 @@ import { state } from '../store'
 import { moduleInstallState } from '../types'
 import { getInstallState, postUninstall } from '/@/api/admin/module'
 import { timeFormat } from '/@/utils/common'
+import { sanitizeHtml } from '/@/utils/sanitizeHtml'
 
 const installButtonState = {
     InstallNow: [moduleInstallState.UNINSTALLED, moduleInstallState.WAIT_INSTALL],

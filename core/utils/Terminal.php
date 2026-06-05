@@ -12,6 +12,7 @@ namespace core\utils;
 
 use Throwable;
 use support\Response;
+use support\think\Cache;
 use Webman\Config;
 use app\common\library\Auth;
 use core\module\Manage;
@@ -207,7 +208,7 @@ class Terminal
 
         if ($authentication) {
             try {
-                $token = get_auth_token();
+                $token = $this->consumeTerminalTicket() ?: get_auth_token();
                 $auth  = Auth::instance();
                 $auth->init($token);
 
@@ -275,6 +276,19 @@ class Terminal
         proc_close($this->process);
         $this->outputFlag('exec-completed');
         return $this->eventStreamResponse();
+    }
+
+    protected function consumeTerminalTicket(): string
+    {
+        $ticket = (string)request()->get('terminal_ticket/s', '');
+        if ($ticket === '' || !preg_match('/^[a-f0-9]{64}$/', $ticket)) {
+            return '';
+        }
+
+        $cacheKey = 'terminal_ticket_' . $ticket;
+        $data = Cache::get($cacheKey);
+        Cache::delete($cacheKey);
+        return is_array($data) ? (string)($data['token'] ?? '') : '';
     }
 
     /**

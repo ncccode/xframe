@@ -141,6 +141,52 @@ if (!function_exists('get_route_remark')) {
     }
 }
 
+if (!function_exists('redact_sensitive_data')) {
+
+    /**
+     * 递归脱敏请求数据中的敏感字段。
+     */
+    function redact_sensitive_data(mixed $data): mixed
+    {
+        if (!is_array($data)) {
+            return $data;
+        }
+
+        foreach ($data as $key => $value) {
+            if (preg_match('/(password|salt|token|authorization|secret|key)/i', (string)$key)) {
+                $data[$key] = '***';
+            } else {
+                $data[$key] = redact_sensitive_data($value);
+            }
+        }
+        return $data;
+    }
+}
+
+if (!function_exists('redact_sensitive_url')) {
+
+    /**
+     * 脱敏 URL 查询串中的敏感字段。
+     */
+    function redact_sensitive_url(string $url): string
+    {
+        if ($url === '' || !str_contains($url, '?')) {
+            return $url;
+        }
+
+        [$base, $query] = explode('?', $url, 2);
+        $fragment = '';
+        if (str_contains($query, '#')) {
+            [$query, $fragment] = explode('#', $query, 2);
+            $fragment = '#' . $fragment;
+        }
+
+        parse_str($query, $params);
+        $params = redact_sensitive_data($params);
+        return $base . '?' . http_build_query($params) . $fragment;
+    }
+}
+
 if (!function_exists('admin_controller_rule_path')) {
 
     /**
@@ -216,13 +262,23 @@ if (!function_exists('log_err')) {
         }
 
         $now = date('Y-m-d H:i:s');
+        $url = redact_sensitive_url((string)$url);
+        $requestData = redact_sensitive_data($requestData);
+        $rawInputForLog = $rawInput;
+        if ($rawInput !== '') {
+            $jsonInput = json_decode($rawInput, true);
+            if (is_array($jsonInput)) {
+                $rawInputForLog = json_encode(redact_sensitive_data($jsonInput), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+
         $logs = "[{$now}] {$ip} {$url} {$method}" . PHP_EOL;
         if ($message !== '') {
             $logs .= $message . PHP_EOL;
         }
         $logs .= 'request:' . json_encode($requestData, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
-        if ($rawInput !== '') {
-            $logs .= 'input:' . $rawInput . PHP_EOL;
+        if ($rawInputForLog !== '') {
+            $logs .= 'input:' . $rawInputForLog . PHP_EOL;
         }
         $logs .= PHP_EOL;
 
@@ -397,12 +453,17 @@ if (!function_exists('build_suffix_svg')) {
      */
     function build_suffix_svg(string $suffix = 'file', ?string $background = null): string
     {
+        $suffix = preg_replace('/[^A-Za-z0-9]/', '', $suffix) ?: 'file';
         $suffix = mb_substr(strtoupper($suffix), 0, 4);
         $total  = unpack('L', hash('adler32', $suffix, true))[1];
         $hue    = $total % 360;
         [$r, $g, $b] = hsv2rgb($hue / 360, 0.3, 0.9);
 
-        $background = $background ?: "rgb($r,$g,$b)";
+        $background = trim((string)($background ?: "rgb($r,$g,$b)"));
+        if (!preg_match('/^(#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/', $background)) {
+            $background = "rgb($r,$g,$b)";
+        }
+        $background = htmlspecialchars($background, ENT_QUOTES | ENT_SUBSTITUTE | ENT_HTML401, 'UTF-8');
 
         return '<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
             <path style="fill:#E2E5E7;" d="M128,0c-17.6,0-32,14.4-32,32v448c0,17.6,14.4,32,32,32h320c17.6,0,32-14.4,32-32V128L352,0H128z"/>
@@ -566,7 +627,6 @@ if (!function_exists('get_auth_token')) {
     {
         $separators = [
             'header' => ['', '-'], // xtoken、x-token【x_token 不在 header 的接受列表内因为兼容性不高，改用 http_x_token】
-            'param'  => ['', '-', '_'], // xtoken、x-token、x_token
             'server' => ['_'], // http_x_token
         ];
 
@@ -574,8 +634,6 @@ if (!function_exists('get_auth_token')) {
         $request = request();
         $tokens[] = $request->header('xtoken');
         $tokens[] = $request->header('x-token');
-        $tokens[] = $request->input('xtoken');
-        $tokens[] = $request->input('x-token');
         $authorization = (string) $request->header('authorization', '');
         if (preg_match('/^Bearer\s+(.+)$/i', $authorization, $matches)) {
             $tokens[] = trim($matches[1]);
@@ -585,7 +643,6 @@ if (!function_exists('get_auth_token')) {
                 $key = ($fun == 'server' ? 'http_' : '') . implode($sp, $names);
                 $tokens[] = match ($fun) {
                     'header' => $request->header($key),
-                    'param' => $request->input($key),
                     'server' => $request->header(str_replace('_', '-', preg_replace('/^http_/', '', $key))),
                 };
             }

@@ -172,13 +172,23 @@ class Admin extends BaseController
         if ($quickSearch) {
             $quickSearchArr = is_array($this->quickSearchField) ? $this->quickSearchField : explode(',', $this->quickSearchField);
             foreach ($quickSearchArr as $k => $v) {
-                $quickSearchArr[$k] = str_contains($v, '.') ? $v : $mainTableAlias . $v;
+                $field = $this->normalizeQueryField((string)$v, $mainTableAlias);
+                if ($field === '') {
+                    unset($quickSearchArr[$k]);
+                    continue;
+                }
+                $quickSearchArr[$k] = $field;
             }
-            $where[] = [implode("|", $quickSearchArr), "LIKE", '%' . str_replace('%', '\%', $quickSearch) . '%'];
+            if ($quickSearchArr) {
+                $where[] = [implode("|", $quickSearchArr), "LIKE", '%' . str_replace('%', '\%', $quickSearch) . '%'];
+            }
         }
         if ($initValue) {
-            $where[] = [$initKey, $initOperator, $initValue];
-            $limit   = 999999;
+            $initField = $this->normalizeQueryField((string)$initKey, $mainTableAlias);
+            if ($initField !== '') {
+                $where[] = [$initField, $initOperator, $initValue];
+                $limit   = 999999;
+            }
         }
 
         // 通用搜索组装
@@ -189,21 +199,9 @@ class Admin extends BaseController
 
             $field['operator'] = $this->getOperatorByAlias($field['operator']);
 
-            // 查询关联表字段，转换表别名（驼峰转小写下划线）
-            if (str_contains($field['field'], '.')) {
-                $fieldNameParts        = explode('.', $field['field']);
-                $fieldNamePartsLastKey = array_key_last($fieldNameParts);
-
-                // 忽略最后一个元素（字段名）
-                foreach ($fieldNameParts as $fieldNamePartsKey => $fieldNamePart) {
-                    if ($fieldNamePartsKey !== $fieldNamePartsLastKey) {
-                        $fieldNameParts[$fieldNamePartsKey] = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $fieldNamePart));
-                    }
-                }
-
-                $fieldName = implode('.', $fieldNameParts);
-            } else {
-                $fieldName = $mainTableAlias . $field['field'];
+            $fieldName = $this->normalizeQueryField((string)$field['field'], $mainTableAlias);
+            if ($fieldName === '') {
+                continue;
             }
 
             // 日期时间
@@ -295,11 +293,16 @@ class Admin extends BaseController
             $order = explode(',', $order);
             $order = [$order[0] => $order[1] ?? 'asc'];
         }
+        $order = is_array($order) ? $this->normalizeOrder($order) : [];
         if (!$this->orderGuarantee) {
             $this->orderGuarantee = [$pk => 'desc'];
         } elseif (is_string($this->orderGuarantee)) {
             $this->orderGuarantee = explode(',', $this->orderGuarantee);
             $this->orderGuarantee = [$this->orderGuarantee[0] => $this->orderGuarantee[1] ?? 'asc'];
+        }
+        $this->orderGuarantee = $this->normalizeOrder((array)$this->orderGuarantee);
+        if (!$this->orderGuarantee) {
+            $this->orderGuarantee = [$pk => 'desc'];
         }
         $orderGuaranteeKey = array_key_first($this->orderGuarantee);
         if (!array_key_exists($orderGuaranteeKey, $order)) {
@@ -307,6 +310,50 @@ class Admin extends BaseController
         }
 
         return $order;
+    }
+
+    protected function normalizeQueryField(string $field, string $mainTableAlias = ''): string
+    {
+        $field = trim($field);
+        if ($field === '' || str_contains($field, '->')) {
+            return '';
+        }
+
+        $parts = explode('.', $field);
+        if (count($parts) > 3) {
+            return '';
+        }
+        foreach ($parts as $part) {
+            if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $part)) {
+                return '';
+            }
+        }
+
+        if (count($parts) > 1) {
+            $lastKey = array_key_last($parts);
+            foreach ($parts as $key => $part) {
+                if ($key !== $lastKey) {
+                    $parts[$key] = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $part));
+                }
+            }
+            return implode('.', $parts);
+        }
+
+        return $mainTableAlias . $field;
+    }
+
+    protected function normalizeOrder(array $order): array
+    {
+        $normalized = [];
+        foreach ($order as $field => $direction) {
+            $field = $this->normalizeQueryField((string)$field);
+            if ($field === '') {
+                continue;
+            }
+            $direction = strtolower((string)$direction) === 'asc' ? 'asc' : 'desc';
+            $normalized[$field] = $direction;
+        }
+        return $normalized;
     }
 
     /**

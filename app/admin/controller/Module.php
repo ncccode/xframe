@@ -13,7 +13,7 @@ use app\common\controller\Admin;
 
 class Module extends Admin
 {
-    protected array $noNeedPermission = ['state', 'dependentInstallComplete'];
+    protected array $noNeedPermission = ['state'];
 
     public function index(): Response
     {

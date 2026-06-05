@@ -20,6 +20,7 @@ export const adminUploadUrl = '/admin/ajax/upload'
 export const adminBuildSuffixSvgUrl = adminBaseRoutePath + '/ajax/buildSuffixSvg'
 export const adminAreaUrl = '/admin/ajax/area'
 export const terminalUrl = adminBaseRoutePath + '/ajax/terminal'
+export const terminalTicketUrl = adminBaseRoutePath + '/ajax/terminalTicket'
 export const changeTerminalConfigUrl = adminBaseRoutePath + '/ajax/changeTerminalConfig'
 
 // 公共
@@ -73,17 +74,14 @@ export function fileUpload(fd: FormData, params: anyObj = {}, forceLocal = false
  * @param background 背景色,如:rgb(255,255,255)
  */
 export function buildSuffixSvgUrl(suffix: string, background = '') {
-    const adminInfo = useAdminInfo()
-    return (
-        getUrl() +
-        adminBuildSuffixSvgUrl +
-        '?xtoken=' +
-        adminInfo.getToken() +
-        '&suffix=' +
-        suffix +
-        (background ? '&background=' + background : '') +
-        '&server=1'
-    )
+    const params = new URLSearchParams({
+        suffix,
+        server: '1',
+    })
+    if (background) {
+        params.set('background', background)
+    }
+    return getUrl() + adminBuildSuffixSvgUrl + '?' + params.toString()
 }
 
 /**
@@ -108,8 +106,7 @@ export function getArea(values: number[]) {
 /**
  * 构建命令执行窗口 URL
  */
-export function buildTerminalUrl(commandKey: string, uuid: string, extend: string) {
-    const adminInfo = useAdminInfo()
+export function buildTerminalUrl(commandKey: string, uuid: string, extend: string, ticket: string) {
     return (
         getUrl() +
         terminalUrl +
@@ -119,10 +116,17 @@ export function buildTerminalUrl(commandKey: string, uuid: string, extend: strin
         encodeURIComponent(uuid) +
         '&extend=' +
         encodeURIComponent(extend) +
-        '&xtoken=' +
-        encodeURIComponent(adminInfo.getToken()) +
+        '&terminal_ticket=' +
+        encodeURIComponent(ticket) +
         '&server=1'
     )
+}
+
+export function postTerminalTicket() {
+    return createAxios({
+        url: terminalTicketUrl,
+        method: 'POST',
+    })
 }
 
 /**
@@ -286,6 +290,21 @@ export class xTableApi {
             },
             {
                 showSuccessMessage: true,
+            }
+        )
+    }
+
+    exportDownload(data: anyObj = {}) {
+        return createAxios(
+            {
+                url: this.actionUrl.get('export'),
+                method: 'post',
+                data,
+                responseType: 'blob',
+            },
+            {
+                reductDataFormat: false,
+                showSuccessMessage: false,
             }
         )
     }

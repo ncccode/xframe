@@ -15,6 +15,19 @@ class Attachment extends AdminController
      */
     protected object $model;
 
+    protected string|array $preExcludeFields = [
+        'url',
+        'storage',
+        'sha1',
+        'topic',
+        'quote',
+        'admin_id',
+        'user_id',
+        'last_upload_time',
+        'create_time',
+        'update_time',
+    ];
+
     protected string|array $quickSearchField = 'name';
 
     protected array $withJoinTable = ['admin', 'user'];

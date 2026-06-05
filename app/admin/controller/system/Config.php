@@ -471,6 +471,9 @@ class Config extends AdminController
         $queryGroup = $this->normalizeConfigGroupParam($rawGroup);
         $groups = $hasGroupsScope ? $queryGroups : ($hasGroupScope ? $queryGroup : self::DEFAULT_VISIBLE_CONFIG_GROUPS);
         $groups = array_values(array_unique($groups));
+        if (!$hasQueryScope) {
+            $groups = array_values(array_intersect($groups, $allGroups));
+        }
 
         if (!$groups || array_diff($groups, $allGroups)) {
             return $this->error(__('You have no permission'));

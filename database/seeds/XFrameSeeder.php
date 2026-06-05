@@ -24,6 +24,8 @@ final class XFrameSeeder extends AbstractSeed
             return;
         }
 
+        $password = $this->resolveDefaultAdminPassword();
+
         $this->table('admin')->insert([
             [
                 'id' => 1,
@@ -32,7 +34,7 @@ final class XFrameSeeder extends AbstractSeed
                 'avatar' => '',
                 'email' => 'admin@xframe.local',
                 'mobile' => '',
-                'password' => hash_password((string) (getenv('XFRAME_DEFAULT_PASSWORD') ?: '123456')),
+                'password' => hash_password($password),
                 'motto' => 'XFrame',
                 'status' => 1,
                 'login_failure' => 0,
@@ -42,6 +44,21 @@ final class XFrameSeeder extends AbstractSeed
                 'update_time' => $now,
             ],
         ])->saveData();
+    }
+
+    private function resolveDefaultAdminPassword(): string
+    {
+        $password = (string) getenv('XFRAME_DEFAULT_PASSWORD');
+        if ($password !== '') {
+            return $password;
+        }
+
+        $password = bin2hex(random_bytes(12));
+        echo PHP_EOL . 'XFrame default admin username: admin' . PHP_EOL;
+        echo 'XFrame generated admin password: ' . $password . PHP_EOL;
+        echo 'Set XFRAME_DEFAULT_PASSWORD before seeding to choose an explicit initial password.' . PHP_EOL . PHP_EOL;
+
+        return $password;
     }
 
     private function seedGroups(string $now): void
@@ -131,6 +148,13 @@ final class XFrameSeeder extends AbstractSeed
             [51, 48, 'button', '调整状态', 'module/change_state', '', '', 'tab', '', '', 0, 0, ''],
             [52, 48, 'button', '卸载', 'module/uninstall', '', '', 'tab', '', '', 0, 0, ''],
             [53, 48, 'button', '上传安装', 'module/upload', '', '', 'tab', '', '', 0, 0, ''],
+            [54, 48, 'button', '完成依赖安装', 'module/dependent_install_complete', '', '', 'tab', '', '', 0, 0, ''],
+            [55, 25, 'button', '数据库连接列表', 'ajax/get_database_connection_list', '', '', 'tab', '', '', 0, 0, ''],
+            [56, 25, 'button', '数据表主键', 'ajax/get_table_pk', '', '', 'tab', '', '', 0, 0, ''],
+            [57, 25, 'button', '数据表列表', 'ajax/get_table_list', '', '', 'tab', '', '', 0, 0, ''],
+            [58, 25, 'button', '数据表字段列表', 'ajax/get_table_field_list', '', '', 'tab', '', '', 0, 0, ''],
+            [59, 25, 'button', '修改终端配置', 'ajax/change_terminal_config', '', '', 'tab', '', '', 0, 0, ''],
+            [60, 25, 'button', '清理缓存', 'ajax/clear_cache', '', '', 'tab', '', '', 0, 0, ''],
         ];
 
         $insert = [];

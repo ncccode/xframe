@@ -354,9 +354,16 @@ trait Admin
         $subId      = (int)$this->request->input('subId', 0);
         $download   = filter_var($this->request->input('download', false), FILTER_VALIDATE_BOOLEAN);
         $getTaskZip = filter_var($this->request->input('getTaskZip', false), FILTER_VALIDATE_BOOLEAN);
+        $downloadZip = filter_var($this->request->input('downloadZip', false), FILTER_VALIDATE_BOOLEAN);
 
         if ($id) {
-            return $getTaskZip ? $this->getTaskZip($id) : $this->exportTask($id, $subId, $download);
+            if ($getTaskZip) {
+                return $this->getTaskZip($id);
+            }
+            if ($downloadZip) {
+                return $this->downloadTaskZip($id);
+            }
+            return $this->exportTask($id, $subId, $download);
         }
 
         [$title, $columns, $order, $query] = $this->buildExportData();
@@ -534,7 +541,7 @@ trait Admin
             return $this->error(__('Export task not found, please restart'));
         }
         if ($task->file) {
-            return $this->success('', ['url' => $task->file]);
+            return $this->success('', ['id' => $task->id, 'file' => $task->file]);
         }
 
         $taskDir = $this->exportRuntimeDir($id);
@@ -562,12 +569,32 @@ trait Admin
             $zip->close();
         }
 
-        $task->file        = $this->exportPublicUrl($zipFileName);
+        $task->file        = $zipFileName;
         $task->progress    = 100;
         $task->export_time = date('Y-m-d H:i:s');
         $task->save();
 
-        return $this->success('', ['url' => $task->file]);
+        return $this->success('', ['id' => $task->id, 'file' => $task->file]);
+    }
+
+    public function downloadTaskZip(int $id): Response
+    {
+        $task = (new Dataexport())->where('id', $id)->where('admin_id', $this->auth->id)->find();
+        if (!$task || !$task->file) {
+            return $this->error(__('Export task not found, please restart'));
+        }
+
+        $fileName = str_replace(['\\', '/'], '', (string)$task->file);
+        if ($fileName === '' || !str_ends_with($fileName, '.export.zip')) {
+            return $this->error(__('Export task not found, please restart'));
+        }
+
+        $file = $this->exportZipDir() . DIRECTORY_SEPARATOR . $fileName;
+        if (!is_file($file)) {
+            return $this->error(__('Export task not found, please restart'));
+        }
+
+        return response()->download($file, $id . '.' . $this->exportSheetTitle((string)$task->name) . '.zip');
     }
 
     /**
@@ -664,7 +691,7 @@ trait Admin
 
     protected function exportZipDir(): string
     {
-        return base_path('public' . DIRECTORY_SEPARATOR . 'export');
+        return $this->exportRuntimeDir() . DIRECTORY_SEPARATOR . 'zip';
     }
 
     protected function ensureDirectory(string $dir): void

@@ -1,7 +1,7 @@
 import { ElNotification } from 'element-plus'
 import { defineStore } from 'pinia'
 import { nextTick, reactive } from 'vue'
-import { buildTerminalUrl } from '/@/api/common'
+import { buildTerminalUrl, postTerminalTicket } from '/@/api/common'
 import { i18n } from '/@/lang/index'
 import { STORE_TERMINAL } from '/@/stores/constant/cacheKey'
 import { SYSTEM_ZINDEX } from '/@/stores/constant/common'
@@ -182,9 +182,26 @@ export const useTerminal = defineStore(
             // 命令执行期间禁用热更新
             closeHotUpdate('terminal')
 
-            window.eventSource = new EventSource(
-                buildTerminalUrl(state.taskList[taskKey].command, state.taskList[taskKey].uuid, state.taskList[taskKey].extend)
-            )
+            postTerminalTicket()
+                .then((res) => {
+                    window.eventSource = new EventSource(
+                        buildTerminalUrl(
+                            state.taskList[taskKey].command,
+                            state.taskList[taskKey].uuid,
+                            state.taskList[taskKey].extend,
+                            res.data.ticket
+                        )
+                    )
+                    bindEventSource(taskKey)
+                })
+                .catch(() => {
+                    setTaskStatus(taskKey, taskStatus.Failed)
+                    taskCompleted(taskKey)
+                    startTask()
+                })
+        }
+
+        function bindEventSource(taskKey: number) {
             window.eventSource.onmessage = function (e) {
                 const data = JSON.parse(e.data)
                 if (!data || !data.data) {

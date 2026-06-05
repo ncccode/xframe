@@ -18,6 +18,11 @@ return [
     'admin_token_keep_time' => 60 * 60 * 24 * 3,
     // 模块纯净安装（安装时移动模块文件而不是复制）
     'module_pure_install'   => true,
+    // 模块包签名校验。生产环境建议保持开启，并配置 XFRAME_MODULE_SIGNING_PUBLIC_KEY 公钥。
+    'module_signature'      => [
+        'required'   => filter_var(getenv('XFRAME_MODULE_SIGNATURE_REQUIRED') ?: 'true', FILTER_VALIDATE_BOOLEAN),
+        'public_key' => getenv('XFRAME_MODULE_SIGNING_PUBLIC_KEY') ?: '',
+    ],
     // 点选验证码配置
     'click_captcha'         => [
         // 模式:text=文字,icon=图标(若只有icon则适用于国际化站点)

@@ -39,6 +39,7 @@ class Index extends Admin
                 'siteName'     => \get_sys_config('site_name'),
                 'version'      => \get_sys_config('version'),
                 'apiUrl'       => Config::get('xframe.api_url'),
+                'map'          => \keys_to_camel_case((array)\get_sys_config('', 'map')),
                 'upload'       => \keys_to_camel_case(\get_upload_config(), ['max_size', 'save_name', 'allowed_suffixes', 'allowed_mime_types']),
                 'cdnUrl'       => \full_url(),
                 'cdnUrlParams' => Config::get('xframe.cdn_url_params'),

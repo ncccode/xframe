@@ -67,7 +67,10 @@ class Manage
         if (is_null(self::$instance)) {
             self::$instance = new static($uid);
         }
-        return self::$instance->setModuleUid($uid);
+        if ($uid !== '') {
+            self::$instance->setModuleUid($uid);
+        }
+        return self::$instance;
     }
 
     public function __construct(string $uid)
@@ -197,6 +200,7 @@ class Manage
         // 解压
         Filesystem::unzip($zipFile);
         self::hoistNestedModuleToRootIfNeeded($this->modulesDir);
+        Server::assertTrustedModulePackage($this->modulesDir);
 
         // 读取ini（提前读取一次确保文件是存在的，避免异常导致zip未被删除）
         $info = Server::getIni($this->modulesDir);
@@ -234,11 +238,7 @@ class Manage
      */
     public function upload(string $file): array
     {
-        $file = Filesystem::fsFit(root_path() . 'public' . $file);
-        if (!is_file($file)) {
-            // 包未找到
-            throw new Exception('Zip file not found');
-        }
+        $file = $this->resolveUploadedModulePackage($file);
 
         $copyTo = $this->installDir . 'uploadTemp' . date('YmdHis') . '.zip';
         copy($file, $copyTo);
@@ -246,6 +246,7 @@ class Manage
         // 解压
         $copyToDir = Filesystem::unzip($copyTo);
         $copyToDir = self::alignUnpackedModulePath($copyToDir);
+        Server::assertTrustedModulePackage($copyToDir);
 
         // 读取ini
         $info = Server::getIni($copyToDir);
@@ -1639,8 +1640,39 @@ class Manage
 
     public function setModuleUid(string $uid): static
     {
+        Server::assertValidModuleUid($uid);
         $this->uid        = $uid;
         $this->modulesDir = $this->installDir . $uid . DIRECTORY_SEPARATOR;
         return $this;
+    }
+
+    /**
+     * @throws Throwable
+     */
+    protected function resolveUploadedModulePackage(string $file): string
+    {
+        if (
+            $file === ''
+            || str_contains($file, "\0")
+            || str_contains($file, '\\')
+            || preg_match('#(^|/)\.\.(?:/|$)#', $file)
+            || preg_match('/^[A-Za-z]:\//', $file)
+        ) {
+            throw new Exception('Zip file path is not allowed');
+        }
+
+        $filePath = realpath(root_path() . 'public' . DIRECTORY_SEPARATOR . ltrim($file, '/'));
+        $storageRoot = realpath(root_path() . 'public' . DIRECTORY_SEPARATOR . 'storage');
+        if (!$filePath || !$storageRoot || !is_file($filePath)) {
+            throw new Exception('Zip file not found');
+        }
+
+        $filePath = Filesystem::fsFit($filePath);
+        $storageRoot = rtrim(Filesystem::fsFit($storageRoot), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        if (!str_starts_with($filePath . DIRECTORY_SEPARATOR, $storageRoot) || strtolower(pathinfo($filePath, PATHINFO_EXTENSION)) !== 'zip') {
+            throw new Exception('Zip file path is not allowed');
+        }
+
+        return $filePath;
     }
 }

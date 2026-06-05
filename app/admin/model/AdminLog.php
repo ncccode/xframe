@@ -147,7 +147,7 @@ class AdminLog extends Model
         self::create([
             'admin_id'  => $adminId,
             'username'  => $username,
-            'url'       => substr(request()->url(), 0, 1500),
+            'url'       => substr(\redact_sensitive_url(request()->url()), 0, 1500),
             'title'     => $title,
             'data'      => !is_scalar($data) ? json_encode($data) : $data,
             'ip'        => request()->getRealIp(),

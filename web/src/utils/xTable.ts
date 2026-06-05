@@ -5,12 +5,10 @@ import Sortable from 'sortablejs'
 import { reactive } from 'vue'
 import { useRoute } from 'vue-router'
 import type { xTableApi } from '/@/api/common'
-import { adminBackendApp, getBackendAppByPath } from '/@/utils/router'
 import { findIndexRow } from '/@/components/table'
 import { i18n } from '/@/lang/index'
 import { auth, getArrayKey } from '/@/utils/common'
-import { getUrl } from '/@/utils/axios'
-import { buildExportDownloadUrl, buildExportPayload } from '/@/utils/xTableExport'
+import { buildExportDownloadPayload, buildExportPayload, downloadBlobResponse } from '/@/utils/xTableExport'
 
 /**
  * 表格管家类
@@ -209,7 +207,6 @@ export default class xTable {
     dataExport = () => {
         if (this.runBefore('dataExport') === false) return
         const route = useRoute()
-        const backendApp = getBackendAppByPath(route.fullPath || route.path) ?? adminBackendApp
 
         return this.api
             .export(
@@ -221,13 +218,9 @@ export default class xTable {
             )
             .then((res) => {
                 if (res.data.download) {
-                    window.location.href = buildExportDownloadUrl({
-                        apiBaseUrl: getUrl(),
-                        routePath: route.path,
-                        taskId: res.data.id,
-                        token: backendApp.getAuthToken(),
-                        tokenHeader: backendApp.tokenHeader,
-                    })
+                    this.api
+                        .exportDownload(buildExportDownloadPayload(res.data.id))
+                        .then((response) => downloadBlobResponse(response, `${String(route.meta.title ?? route.name ?? 'export')}.xlsx`))
                     return
                 }
 

@@ -47,6 +47,7 @@ final class AddModuleStoreRule extends AbstractMigration
             ['调整状态', 'module/change_state'],
             ['卸载', 'module/uninstall'],
             ['上传安装', 'module/upload'],
+            ['完成依赖安装', 'module/dependent_install_complete'],
         ];
         $rows = [];
         foreach ($buttons as [$title, $name]) {
@@ -94,6 +95,7 @@ final class AddModuleStoreRule extends AbstractMigration
             'module/change_state',
             'module/uninstall',
             'module/upload',
+            'module/dependent_install_complete',
         ];
         $placeholders = implode(', ', array_fill(0, count($names), '?'));
         $this->execute("DELETE FROM $table WHERE $column IN ($placeholders)", $names);

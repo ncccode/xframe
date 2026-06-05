@@ -4,14 +4,6 @@ interface ExportPayloadInput {
     filter?: XTable['filter']
 }
 
-interface ExportDownloadUrlInput {
-    apiBaseUrl: string
-    routePath: string
-    taskId: string | number
-    token: string
-    tokenHeader?: string
-}
-
 export function buildExportPayload(input: ExportPayloadInput) {
     return {
         title: input.title,
@@ -20,15 +12,41 @@ export function buildExportPayload(input: ExportPayloadInput) {
     }
 }
 
-export function buildExportDownloadUrl(input: ExportDownloadUrlInput) {
-    const base = input.apiBaseUrl.replace(/\/$/, '')
-    const route = input.routePath.replace(/\/$/, '')
-    const params = new URLSearchParams({
-        subId: '0',
-        download: 'true',
-        id: String(input.taskId),
-    })
-    params.set(input.tokenHeader || 'xtoken', input.token)
-    params.set('server', '1')
-    return `${base}${route}/export?${params.toString()}`
+export function buildExportDownloadPayload(taskId: string | number, options: { subId?: string | number; zip?: boolean } = {}) {
+    return {
+        id: taskId,
+        ...(options.zip ? { downloadZip: 1 } : { subId: options.subId ?? 0, download: true }),
+    }
+}
+
+export function downloadBlobResponse(response: any, defaultFilename = 'download') {
+    const blob = response?.data
+    if (!(blob instanceof Blob)) {
+        return
+    }
+
+    const filename = resolveDownloadFilename(response?.headers?.['content-disposition'], defaultFilename)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+}
+
+export function resolveDownloadFilename(contentDisposition = '', defaultFilename = 'download') {
+    const header = String(contentDisposition)
+    const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)
+    if (encoded) {
+        try {
+            return decodeURIComponent(encoded[1])
+        } catch {
+            return defaultFilename
+        }
+    }
+
+    const plain = header.match(/filename=\"?([^\";]+)\"?/i)
+    return plain ? plain[1] : defaultFilename
 }

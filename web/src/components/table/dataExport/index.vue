@@ -45,6 +45,7 @@ import type { TagProps } from 'element-plus'
 import { inject, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type xTableClass from '/@/utils/xTable'
+import { buildExportDownloadPayload, downloadBlobResponse } from '/@/utils/xTableExport'
 
 interface ExportSubtask {
     id: number
@@ -137,7 +138,10 @@ const onDownloadTaskZip = () => {
             getTaskZip: 1,
         })
         .then((res) => {
-            window.location.href = res.data.url
+            return xTable.api.exportDownload(buildExportDownloadPayload(res.data.id, { zip: true }))
+        })
+        .then((response) => {
+            downloadBlobResponse(response, `${task.name || 'export'}.zip`)
         })
 }
 

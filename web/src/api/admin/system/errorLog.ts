@@ -1,6 +1,4 @@
-import createAxios, { getUrl } from '/@/utils/axios'
-import { adminBaseRoutePath } from '/@/router/static/adminBase'
-import { useAdminInfo } from '/@/stores/adminInfo'
+import createAxios from '/@/utils/axios'
 
 export const url = '/admin/system/ErrorLog/'
 
@@ -26,13 +24,19 @@ export function delall() {
     )
 }
 
-export function downloadUrl(filename: string) {
-    const adminInfo = useAdminInfo()
-    const params = new URLSearchParams({
-        filename,
-        xtoken: adminInfo.getToken(),
-        server: '1',
-    })
-
-    return getUrl() + adminBaseRoutePath + '/system/ErrorLog/download?' + params.toString()
+export function download(filename: string) {
+    return createAxios(
+        {
+            url: url + 'download',
+            method: 'post',
+            data: {
+                filename,
+            },
+            responseType: 'blob',
+        },
+        {
+            reductDataFormat: false,
+            showSuccessMessage: false,
+        }
+    )
 }

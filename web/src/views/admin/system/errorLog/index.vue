@@ -38,12 +38,13 @@ import { concat } from 'lodash-es'
 import { provide } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { xTableApi } from '/@/api/common'
-import { delall, downloadUrl, item } from '/@/api/admin/system/errorLog'
+import { delall, download, item } from '/@/api/admin/system/errorLog'
 import { defaultOptButtons } from '/@/components/table'
 import Table from '/@/components/table/index.vue'
 import TableHeader from '/@/components/table/header/index.vue'
 import { auth } from '/@/utils/common'
 import xTableClass from '/@/utils/xTable'
+import { downloadBlobResponse } from '/@/utils/xTableExport'
 import Info from './info.vue'
 
 defineOptions({
@@ -144,7 +145,9 @@ const infoButtonClick = (row: TableRow) => {
 
 const downloadButtonClick = (row: TableRow) => {
     if (!row) return
-    window.open(downloadUrl(row.name), '_blank')
+    download(row.name).then((response) => {
+        downloadBlobResponse(response, row.name)
+    })
 }
 
 const delallButtonClick = () => {

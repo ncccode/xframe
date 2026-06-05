@@ -14,8 +14,8 @@ use app\common\controller\Admin;
 
 class Ajax extends Admin
 {
-    protected array $noNeedPermission = ['*'];
-    protected array $noNeedLogin = ['terminal'];
+    protected array $noNeedPermission = ['upload', 'area', 'buildSuffixSvg'];
+    protected array $noNeedLogin = ['terminal', 'buildSuffixSvg'];
 
     public function initialize(): void
     {
@@ -64,7 +64,10 @@ class Ajax extends Admin
         $suffix     = $this->request->input('suffix', 'file');
         $background = $this->request->input('background');
         $content    = \build_suffix_svg((string)$suffix, (string)$background);
-        return response($content, 200, ['Content-Length' => strlen($content)])->contentType('image/svg+xml');
+        return response($content, 200, [
+            'Content-Length' => strlen($content),
+            'Content-Type'   => 'image/svg+xml',
+        ]);
     }
 
     /**
@@ -85,6 +88,7 @@ class Ajax extends Admin
         }
 
         if ($quickSearch) {
+            $quickSearch = preg_quote((string)$quickSearch, '/');
             $desensitization = array_filter($desensitization, function ($item) use ($quickSearch) {
                 return preg_match("/$quickSearch/i", $item['key']);
             });
@@ -143,6 +147,7 @@ class Ajax extends Admin
         }
 
         if ($quickSearch) {
+            $quickSearch = preg_quote((string)$quickSearch, '/');
             $tables = array_filter($tables, function ($comment) use ($quickSearch) {
                 return preg_match("/$quickSearch/i", $comment);
             });
@@ -210,6 +215,21 @@ class Ajax extends Admin
             return $this->success();
         }
         return $this->error(__('Failed to modify the terminal configuration. Please modify the configuration file manually:%s', ['/config/terminal.php']));
+    }
+
+    public function terminalTicket(): Response
+    {
+        if (!$this->auth->isSuperAdmin()) {
+            return $this->error(__('You have no permission'), [], 401);
+        }
+
+        $ticket = bin2hex(random_bytes(32));
+        Cache::set('terminal_ticket_' . $ticket, [
+            'token' => $this->auth->getToken(),
+            'admin_id' => $this->auth->id,
+        ], 60);
+
+        return $this->success('', ['ticket' => $ticket]);
     }
 
     public function clearCache(): Response
