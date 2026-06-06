@@ -4,7 +4,7 @@
 
 模块包内可包含与主工程对齐的子目录，安装时会合并到项目根目录。`core\module\Server::getOverwriteDir()` 定义为：
 
-`app`、`config`、`database`、`extend`、`modules`、`public`、`vendor`、`web`、`web-nuxt`
+`app`、`config`、`database`、`extend`、`modules`、`public`、`uniapp`、`vendor`、`web`、`web-nuxt`
 
 实际打包时按模块需要包含其中部分即可；不包含的目录不会写入。
 

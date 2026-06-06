@@ -405,6 +405,7 @@ class Server
             'extend',
             'modules',
             'public',
+            'uniapp',
             'vendor',
             'web',
             'web-nuxt',
