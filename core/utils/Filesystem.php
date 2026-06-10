@@ -148,6 +148,21 @@ class Filesystem
         }
 
         try {
+            // 解压前逐条校验条目名，拒绝绝对路径、盘符、空字节及 `..` 目录穿越，防止 Zip-Slip
+            for ($i = 0; $i < $zip->numFiles; $i++) {
+                $entryName = (string)$zip->getNameIndex($i);
+                if (
+                    $entryName === ''
+                    || str_contains($entryName, "\0")
+                    || str_starts_with($entryName, '/')
+                    || str_starts_with($entryName, '\\')
+                    || preg_match('/^[A-Za-z]:[\\\\\/]/', $entryName)
+                    || preg_match('#(^|[\\\\/])\.\.([\\\\/]|$)#', $entryName)
+                ) {
+                    throw new RuntimeException("Illegal entry in zip file: {$entryName}");
+                }
+            }
+
             if (!$zip->extractTo($dir)) {
                 throw new RuntimeException('Unable to extract ZIP file');
             }

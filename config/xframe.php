@@ -42,8 +42,9 @@ return [
     'token'                 => [
         // 默认驱动方式
         'default' => 'mysql',
-        // 加密key
-        'key'     => 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I',
+        // 加密key：优先读取环境变量 XFRAME_TOKEN_KEY，生产环境必须在 .env 中配置随机值，
+        // 不要使用此处的内置默认值（该默认值已公开于源码，仅用于本地开发兜底）。
+        'key'     => getenv('XFRAME_TOKEN_KEY') ?: 'tcbDgmqLVzuAdNH39o0QnhOisvSCFZ7I',
         // 加密方式
         'algo'    => 'ripemd160',
         // 驱动

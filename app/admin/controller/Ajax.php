@@ -108,7 +108,7 @@ class Ajax extends Admin
      */
     public function getTablePk(?string $table = null, ?string $connection = null): Response
     {
-        if (!$table) {
+        if (!$table || !$this->isValidTableName($table) || !$this->isValidConnectionName($connection)) {
             return $this->error(__('Parameter error'));
         }
 
@@ -128,6 +128,10 @@ class Ajax extends Admin
         $connection   = $this->request->input('connection');// 数据库连接配置标识
         $samePrefix   = $this->request->input('samePrefix', true);// 是否仅返回项目数据表（前缀同项目一致的）
         $excludeTable = $this->request->input('excludeTable', []);// 要排除的数据表数组（表名无需带前缀）
+
+        if (!$this->isValidConnectionName($connection)) {
+            return $this->error(__('Parameter error'));
+        }
 
         $outTables = [];
         $dbConfig = config('think-orm.connections.' . ($connection ?: config('think-orm.default')), []);
@@ -182,7 +186,7 @@ class Ajax extends Admin
         $table      = $this->request->input('table');
         $clean      = $this->request->input('clean', true);
         $connection = $this->request->input('connection');
-        if (!$table) {
+        if (!$table || !$this->isValidTableName($table) || !$this->isValidConnectionName($connection)) {
             return $this->error(__('Parameter error'));
         }
 
@@ -253,5 +257,31 @@ class Ajax extends Admin
     public function terminal(): Response
     {
         return (new Terminal())->exec();
+    }
+
+    /**
+     * 校验数据表名称是否合法（仅允许字母、数字、下划线）
+     * @param mixed $table
+     * @return bool
+     */
+    protected function isValidTableName(mixed $table): bool
+    {
+        return is_string($table) && (bool)preg_match('/^[A-Za-z0-9_]+$/', $table);
+    }
+
+    /**
+     * 校验数据库连接标识是否合法（空表示默认连接，否则必须是已配置的连接名）
+     * @param mixed $connection
+     * @return bool
+     */
+    protected function isValidConnectionName(mixed $connection): bool
+    {
+        if ($connection === null || $connection === '') {
+            return true;
+        }
+        if (!is_string($connection) || !preg_match('/^[A-Za-z0-9_.-]+$/', $connection)) {
+            return false;
+        }
+        return array_key_exists($connection, (array)config('think-orm.connections', []));
     }
 }
