@@ -3,6 +3,7 @@
 namespace core\utils;
 
 use Throwable;
+use InvalidArgumentException;
 use support\think\Db;
 use Webman\Config;
 
@@ -94,6 +95,10 @@ class ClickCaptcha
      */
     public function creat(string $id): array
     {
+        if ($id === '' || strlen($id) > 64 || !preg_match('/^[A-Za-z0-9_\-:.]+$/', $id)) {
+            throw new InvalidArgumentException('Captcha id is invalid');
+        }
+
         $imagePath  = Filesystem::fsFit(public_path($this->bgPaths[mt_rand(0, count($this->bgPaths) - 1)]));
         $fontPath   = Filesystem::fsFit(public_path($this->fontPaths[mt_rand(0, count($this->fontPaths) - 1)]));
         $randPoints = $this->randPoints($this->config['length'] + $this->config['confuse_length']);
@@ -202,35 +207,78 @@ class ClickCaptcha
     {
         $key     = md5($id);
         $captcha = Db::name('captcha')->where('key', $key)->find();
-        if ($captcha) {
-            // 验证码过期
-            if (time() > $captcha['expire_time']) {
-                Db::name('captcha')->where('key', $key)->delete();
-                return false;
-            }
-            $textArr = json_decode($captcha['captcha'], true);
-            list($xy, $w, $h) = explode(';', $info);
-            $xyArr = explode('-', $xy);
-            $xPro  = $w / $textArr['width'];// 宽度比例
-            $yPro  = $h / $textArr['height'];// 高度比例
-            foreach ($xyArr as $k => $v) {
-                $xy = explode(',', $v);
-                $x  = $xy[0];
-                $y  = $xy[1];
-                if ($x / $xPro < $textArr['text'][$k]['x'] || $x / $xPro > $textArr['text'][$k]['x'] + $textArr['text'][$k]['width']) {
-                    return false;
-                }
-                $phStart = $textArr['text'][$k]['icon'] ? $textArr['text'][$k]['y'] : $textArr['text'][$k]['y'] - $textArr['text'][$k]['height'];
-                $phEnd   = $textArr['text'][$k]['icon'] ? $textArr['text'][$k]['y'] + $textArr['text'][$k]['height'] : $textArr['text'][$k]['y'];
-                if ($y / $yPro < $phStart || $y / $yPro > $phEnd) {
-                    return false;
-                }
-            }
-            if ($unset) Db::name('captcha')->where('key', $key)->delete();
-            return true;
-        } else {
+        if (!$captcha) {
             return false;
         }
+
+        // 验证码过期
+        if (time() > $captcha['expire_time']) {
+            Db::name('captcha')->where('key', $key)->delete();
+            return false;
+        }
+
+        $textArr = json_decode((string)$captcha['captcha'], true);
+        if (
+            !is_array($textArr)
+            || !isset($textArr['text'], $textArr['width'], $textArr['height'])
+            || !is_array($textArr['text'])
+            || !$textArr['text']
+            || (float)$textArr['width'] <= 0
+            || (float)$textArr['height'] <= 0
+        ) {
+            Db::name('captcha')->where('key', $key)->delete();
+            return false;
+        }
+
+        // 验证信息格式：x1,y1-x2,y2;width;height
+        $infoParts = explode(';', $info);
+        if (count($infoParts) !== 3) {
+            return $this->fail($key);
+        }
+        list($xy, $w, $h) = $infoParts;
+        if (!is_numeric($w) || !is_numeric($h) || (float)$w <= 0 || (float)$h <= 0) {
+            return $this->fail($key);
+        }
+
+        $xyArr = explode('-', $xy);
+
+        // 坐标数量必须与验证码点位数量一致，防止只提交部分坐标绕过校验
+        if (count($xyArr) !== count($textArr['text'])) {
+            return $this->fail($key);
+        }
+
+        $xPro = (float)$w / (float)$textArr['width'];// 宽度比例
+        $yPro = (float)$h / (float)$textArr['height'];// 高度比例
+
+        foreach ($xyArr as $k => $v) {
+            if (!preg_match('/^\d+(?:\.\d+)?,\d+(?:\.\d+)?$/', $v)) {
+                return $this->fail($key);
+            }
+            list($x, $y) = array_map('floatval', explode(',', $v));
+            $item        = $textArr['text'][$k];
+            if ($x / $xPro < $item['x'] || $x / $xPro > $item['x'] + $item['width']) {
+                // 校验失败立即删除，避免同一验证码被无限次尝试
+                return $this->fail($key);
+            }
+            $phStart = $item['icon'] ? $item['y'] : $item['y'] - $item['height'];
+            $phEnd   = $item['icon'] ? $item['y'] + $item['height'] : $item['y'];
+            if ($y / $yPro < $phStart || $y / $yPro > $phEnd) {
+                return $this->fail($key);
+            }
+        }
+
+        if ($unset) Db::name('captcha')->where('key', $key)->delete();
+        return true;
+    }
+
+    /**
+     * 校验失败，立即删除验证码记录
+     * @param string $key 验证码记录主键
+     */
+    protected function fail(string $key): bool
+    {
+        Db::name('captcha')->where('key', $key)->delete();
+        return false;
     }
 
     /**

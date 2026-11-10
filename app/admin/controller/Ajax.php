@@ -215,6 +215,10 @@ class Ajax extends Admin
     public function changeTerminalConfig(): Response
     {
         AdminLog::instance()->setTitle(__('Change terminal config'));
+        // 包管理器属于全局构建配置，仅允许超级管理员修改
+        if (!$this->auth->isSuperAdmin()) {
+            return $this->error(__('You have no permission'));
+        }
         if (Terminal::changeTerminalConfig()) {
             return $this->success();
         }

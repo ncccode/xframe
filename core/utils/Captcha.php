@@ -39,6 +39,16 @@ use support\think\Db;
  */
 class Captcha
 {
+    /**
+     * 逻辑验证码密文长度
+     */
+    public const LOGIC_CAPTCHA = 32;
+
+    /**
+     * 图形验证码密文长度
+     */
+    public const GRAPHIC_CAPTCHA = 30;
+
     protected array $config = [
         // 验证码加密密钥
         'seKey'    => 'XFrame',
@@ -134,18 +144,19 @@ class Captcha
 
     /**
      * 验证验证码是否正确
-     * @param string $code 用户验证码
-     * @param string $id   验证码标识
+     * @param string $code    用户验证码
+     * @param string $id      验证码标识
+     * @param int    $typeLen 验证码类型和长度，内置常量：LOGIC_CAPTCHA=逻辑验证码，GRAPHIC_CAPTCHA=图形验证码
      * @return bool 用户验证码是否正确
      * @throws Throwable
      */
-    public function check(string $code, string $id): bool
+    public function check(string $code, string $id, int $typeLen = self::LOGIC_CAPTCHA): bool
     {
-        $key    = $this->authCode($this->seKey, $id);
+        $key    = $this->captchaKey($id, $typeLen);
         $seCode = Db::name('captcha')->where('key', $key)->find();
 
-        // 验证码为空
-        if (empty($code) || empty($seCode)) {
+        // 验证码为空，或验证码类型与当前校验类型不一致（图形验证码不得用于逻辑验证码校验，反之亦然）
+        if (empty($code) || empty($seCode) || strlen((string)$seCode['code']) !== $typeLen) {
             return false;
         }
 
@@ -155,7 +166,7 @@ class Captcha
             return false;
         }
 
-        if ($this->authCode(strtoupper($code), $id) == $seCode['code']) {
+        if (hash_equals((string)$seCode['code'], $this->authCode(strtoupper($code), $id, $typeLen))) {
             $this->reset && Db::name('captcha')->where('key', $key)->delete();
             return true;
         }
@@ -173,14 +184,14 @@ class Captcha
     public function create(string $id, string|bool $captcha = false): string
     {
         $nowTime     = time();
-        $key         = $this->authCode($this->seKey, $id);
+        $key         = $this->captchaKey($id, self::LOGIC_CAPTCHA);
         $captchaTemp = Db::name('captcha')->where('key', $key)->find();
         if ($captchaTemp) {
             // 重复的为同一标识创建验证码
             Db::name('captcha')->where('key', $key)->delete();
         }
         $captcha = $this->generate($captcha);
-        $code    = $this->authCode($captcha, $id);
+        $code    = $this->authCode($captcha, $id, self::LOGIC_CAPTCHA);
         Db::name('captcha')
             ->insert([
                 'key'         => $key,
@@ -195,12 +206,13 @@ class Captcha
     /**
      * 获取验证码数据
      * @param string $id 验证码标识
+     * @param int    $typeLen 验证码类型和长度
      * @return array
      * @throws Throwable
      */
-    public function getCaptchaData(string $id): array
+    public function getCaptchaData(string $id, int $typeLen = self::LOGIC_CAPTCHA): array
     {
-        $key    = $this->authCode($this->seKey, $id);
+        $key    = $this->captchaKey($id, $typeLen);
         $seCode = Db::name('captcha')->where('key', $key)->find();
         return $seCode ?: [];
     }
@@ -254,17 +266,17 @@ class Captcha
             $this->writeCurve();
         }
 
-        $key     = $this->authCode($this->seKey, $id);
+        $key     = $this->captchaKey($id, self::GRAPHIC_CAPTCHA);
         $captcha = Db::name('captcha')->where('key', $key)->find();
 
         // 绘验证码
-        if ($captcha && $nowTime <= $captcha['expire_time']) {
+        if ($captcha && strlen((string)$captcha['code']) === self::GRAPHIC_CAPTCHA && $nowTime <= $captcha['expire_time']) {
             $this->writeText($captcha['captcha']);
         } else {
             $captcha = $this->writeText();
 
             // 保存验证码
-            $code = $this->authCode(strtoupper(implode('', $captcha)), $id);
+            $code = $this->authCode(strtoupper(implode('', $captcha)), $id, self::GRAPHIC_CAPTCHA);
             Db::name('captcha')->insert([
                 'key'         => $key,
                 'code'        => $code,
@@ -412,12 +424,26 @@ class Captcha
      * 加密验证码
      * @param string $str 验证码字符串
      * @param string $id  验证码标识
+     * @param int    $len 需要的密文长度
      */
-    private function authCode(string $str, string $id): string
+    private function authCode(string $str, string $id, int $len = 32): string
     {
         $key = substr(md5($this->seKey), 5, 8);
         $str = substr(md5($str), 8, 10);
-        return md5($key . $str . $id);
+        return substr(md5($key . $str . $id), 0, $len);
+    }
+
+    /**
+     * 获取验证码在数据表中的主键
+     *
+     * 图形验证码与逻辑验证码使用相互独立的 key 空间，避免同标识下存储串用
+     * @param string $id      验证码标识
+     * @param int    $typeLen 验证码类型和长度
+     */
+    private function captchaKey(string $id, int $typeLen): string
+    {
+        $scope = $typeLen === self::GRAPHIC_CAPTCHA ? 'graphic' : 'logic';
+        return $this->authCode($this->seKey, $scope . ':' . $id);
     }
 
     /**

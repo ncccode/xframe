@@ -10,6 +10,8 @@ return [
     'cors_request_domain'   => 'localhost,127.0.0.1',
     // 是否开启管理员登录验证码
     'admin_login_captcha'   => false,
+    // 是否启用旧版图形验证码接口（/api/common/captcha），默认关闭，避免被用于绕过逻辑验证码
+    'graphic_captcha'       => false,
     // 管理员登录失败可重试次数,false则无限
     'admin_login_retry'     => 10,
     // 开启管理员单处登录它处失效
@@ -32,6 +34,8 @@ return [
         // 混淆点长度
         'confuse_length' => 2,
     ],
+    // 验证码接口限流（同一 IP 每分钟每个验证码接口的请求上限，<=0 表示不限制）
+    'captcha_rate_limit'    => 60,
     // 代理服务器IP（\think\Request 类将尝试获取这些代理服务器发送过来的真实IP）
     'proxy_server_ip'       => [],
     // 单个 xlsx 最大记录数

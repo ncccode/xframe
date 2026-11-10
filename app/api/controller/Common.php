@@ -10,17 +10,52 @@ use core\service\Token;
 use core\utils\Captcha;
 use core\utils\ClickCaptcha;
 use core\utils\Random;
+use support\think\Cache;
 use support\Response;
 use Webman\Config;
 
 class Common extends BaseController
 {
     /**
+     * 验证码接口限流，防止被用于批量生成验证码或暴力尝试
+     * @param string $action 接口标识
+     * @return bool 是否已超限
+     */
+    private function captchaRateLimited(string $action): bool
+    {
+        $limit = (int)Config::get('xframe.captcha_rate_limit', 60);
+        if ($limit <= 0) {
+            return false;
+        }
+
+        $cacheKey = 'captcha_rate:' . $action . ':' . md5((string)$this->request->getRealIp());
+        $count    = (int)Cache::get($cacheKey);
+        if ($count >= $limit) {
+            return true;
+        }
+        Cache::set($cacheKey, $count + 1, 60);
+        return false;
+    }
+
+    /**
      * 图形验证码
      */
     public function captcha(): Response
     {
+        // 旧版图形验证码默认禁用；如确需使用，请在 config/xframe.php 中开启 graphic_captcha
+        if (!Config::get('xframe.graphic_captcha', false)) {
+            return $this->error(__('Parameter error'), [], 404);
+        }
+
+        if ($this->captchaRateLimited('graphic')) {
+            return $this->error(__('Too many requests, please try again later'), [], 429);
+        }
+
         $captchaId = (string)$this->request->input('id', '');
+        if (strlen($captchaId) > 64 || ($captchaId !== '' && !preg_match('/^[A-Za-z0-9_\-:.]+$/', $captchaId))) {
+            return $this->error(__('Parameter error'));
+        }
+
         $config = [
             'codeSet'  => '123456789',
             'fontSize' => 22,
@@ -38,8 +73,12 @@ class Common extends BaseController
      */
     public function clickCaptcha(): Response
     {
+        if ($this->captchaRateLimited('click')) {
+            return $this->error(__('Too many requests, please try again later'), [], 429);
+        }
+
         $id = (string)$this->request->input('id', '');
-        if ($id === '') {
+        if ($id === '' || strlen($id) > 64 || !preg_match('/^[A-Za-z0-9_\-:.]+$/', $id)) {
             return $this->error(__('Parameter error'));
         }
 
@@ -51,11 +90,15 @@ class Common extends BaseController
      */
     public function checkClickCaptcha(): Response
     {
+        if ($this->captchaRateLimited('click_check')) {
+            return $this->error(__('Too many requests, please try again later'), [], 429);
+        }
+
         $id = (string)$this->request->post('id', '');
         $info = (string)$this->request->post('info', '');
         $unset = filter_var($this->request->post('unset', false), FILTER_VALIDATE_BOOLEAN);
 
-        if ($id === '' || $info === '') {
+        if ($id === '' || $info === '' || strlen($id) > 64 || strlen($info) > 512) {
             return $this->error(__('Parameter error'));
         }
 

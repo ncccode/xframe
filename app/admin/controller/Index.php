@@ -126,8 +126,19 @@ class Index extends Admin
     public function logout(): Response
     {
         if ($this->request->isPost()) {
-            $refreshToken = $this->request->post('refreshToken', '');
-            if ($refreshToken) (new Token())->delete((string)$refreshToken);
+            $refreshToken = (string)$this->request->post('refreshToken', '');
+            if ($refreshToken) {
+                // 仅允许注销当前登录管理员自己的刷新 token，避免越权注销他人会话
+                $tokenService = new Token();
+                $tokenData    = $tokenService->get($refreshToken);
+                if (
+                    $tokenData
+                    && (int)($tokenData['user_id'] ?? 0) === (int)$this->auth->id
+                    && (string)($tokenData['type'] ?? '') === $this->auth::TOKEN_TYPE . '-refresh'
+                ) {
+                    $tokenService->delete($refreshToken);
+                }
+            }
             $this->auth->logout();
             return $this->success();
         }

@@ -162,6 +162,15 @@ class Admin extends BaseController
         $initKey      = $this->request->input("initKey", $pk);
         $initValue    = $this->request->input("initValue", '');
         $initOperator = $this->request->input("initOperator", 'in');
+        $initOperator = is_string($initOperator) ? strtolower(trim($initOperator)) : 'in';
+        // 初始化查询操作符白名单，禁止 exp 等可拼接原始 SQL 的表达式
+        if (!in_array($initOperator, ['in', 'not in', '=', '<>', 'like', 'not like'], true)) {
+            $initOperator = 'in';
+        }
+        // 非 IN 条件仅接受标量，避免数组被当作原始条件处理
+        if ($initOperator !== 'in' && $initOperator !== 'not in' && !is_scalar($initValue)) {
+            $initValue = '';
+        }
 
         $where              = [];
         $modelTable         = strtolower($this->model->getTable());
